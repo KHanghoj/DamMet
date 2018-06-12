@@ -2,6 +2,8 @@
 # compiler:
 #   - clang++
 #   - g++
+image:
+  - ubuntu
 
 before_script:
   - apt-get install liblzma-dev libbz2-dev libnlopt-dev libz-dev
