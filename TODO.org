@@ -1,2 +1,0 @@
-* Make a small script to identify sites more than one G->A on the plus strand and C->T on the minus strand. These sites should then be excluded with the exclude option.
-
