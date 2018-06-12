@@ -210,29 +210,29 @@ tally_mat_freq read_count_file(general_settings & settings, std::string & rg){
 };
 
 // Printing dinucl_data
-void print_dinucl(const general_settings &settings,
-                  const std::vector<per_site> &data) {
+// void print_dinucl(const general_settings &settings,
+//                   const std::vector<per_site> &data) {
 
-  std::string filename = settings.outbase + ".dinucls";
-  std::ofstream f(filename.c_str());
-  checkfilehandle(f, filename);
-  if (f.is_open()) {
-    for (const auto &site : data) {
-      dinucl_pair_of_pair *dinucl_max =
-        &ALL_DINUCL_PAIR_OF_PAIRS.at(site.dinucl_max_idx);
-      dinucl_pair_of_pair *t = &ALL_DINUCL_PAIR_OF_PAIRS.at(IDX_CpG_CpG);
-      f << site.position << " " << site.depth << " " << t->first.first
-        << t->first.second << " " << t->second.first << t->second.second << " "
-        << site.dinucl_genotype_likelihoods.at(IDX_CpG_CpG) << " "
-        << site.dinucl_max_idx << " "
-        << site.dinucl_genotype_likelihoods[site.dinucl_max_idx] << " "
-        << dinucl_max->first.first << dinucl_max->first.second << " "
-        << dinucl_max->second.first << dinucl_max->second.second << " ::: add simple count statistic 0,1,2";
-      f << '\n';
-    }
-  }
-  f.close();
-}
+//   std::string filename = settings.outbase + ".dinucls";
+//   std::ofstream f(filename.c_str());
+//   checkfilehandle(f, filename);
+//   if (f.is_open()) {
+//     for (const auto &site : data) {
+//       dinucl_pair_of_pair *dinucl_max =
+//         &ALL_DINUCL_PAIR_OF_PAIRS.at(site.dinucl_max_idx);
+//       dinucl_pair_of_pair *t = &ALL_DINUCL_PAIR_OF_PAIRS.at(IDX_CpG_CpG);
+//       f << site.position << " " << site.depth << " " << t->first.first
+//         << t->first.second << " " << t->second.first << t->second.second << " "
+//         << site.dinucl_genotype_likelihoods.at(IDX_CpG_CpG) << " "
+//         << site.dinucl_max_idx << " "
+//         << site.dinucl_genotype_likelihoods[site.dinucl_max_idx] << " "
+//         << dinucl_max->first.first << dinucl_max->first.second << " "
+//         << dinucl_max->second.first << dinucl_max->second.second << " ::: add simple count statistic 0,1,2";
+//       f << '\n';
+//     }
+//   }
+//   f.close();
+// }
 
 
 
@@ -586,21 +586,21 @@ void add_aligned_data(const general_settings &settings,
   }
 }
 
-bool check_max_dinucl_CpG(const per_site & site, const double & min_CpG_CpG_prob){
-  // IDX_CpG_CpG  // 81
-  // IDX_CpG_CpA  // 60
-  // IDX_CpG_TpG  // 89
-  // IDX_TpG_TpG  // 133
-  // IDX_CpA_CpA  // 58
-  return ((site.dinucl_max_idx == IDX_CpG_CpG ||
-           site.dinucl_max_idx == IDX_CpG_CpA ||
-           site.dinucl_max_idx == IDX_CpG_TpG ||
-           site.dinucl_max_idx == IDX_TpG_TpG ||
-           site.dinucl_max_idx == IDX_CpA_CpA) &&
-          (site.dinucl_genotype_likelihoods[IDX_CpG_CpG] >= min_CpG_CpG_prob)
-          ? true
-          : false);
-}
+// bool check_max_dinucl_CpG(const per_site & site, const double & min_CpG_CpG_prob){
+//   // IDX_CpG_CpG  // 81
+//   // IDX_CpG_CpA  // 60
+//   // IDX_CpG_TpG  // 89
+//   // IDX_TpG_TpG  // 133
+//   // IDX_CpA_CpA  // 58
+//   return ((site.dinucl_max_idx == IDX_CpG_CpG ||
+//            site.dinucl_max_idx == IDX_CpG_CpA ||
+//            site.dinucl_max_idx == IDX_CpG_TpG ||
+//            site.dinucl_max_idx == IDX_TpG_TpG ||
+//            site.dinucl_max_idx == IDX_CpA_CpA) &&
+//           (site.dinucl_genotype_likelihoods[IDX_CpG_CpG] >= min_CpG_CpG_prob)
+//           ? true
+//           : false);
+// }
 
 struct F_void {
   general_settings settings;
