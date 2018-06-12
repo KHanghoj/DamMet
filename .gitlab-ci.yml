@@ -2,15 +2,18 @@
 # compiler:
 #   - clang++
 #   - g++
-image: ubuntu
-
+# image: ubuntu
+image: node:latest
 before_script:
+  - echo `pwd`
   - apt-get update -qq && apt-get install -y liblzma-dev libbz2-dev libnlopt-dev libz-dev git g++ build-essential
   - git clone git://github.com/samtools/htslib.git
   - cd htslib;make;cd ..
+
   
 my_deammeth_test:
   script: 
+    #- find . 
     - make -f Makefile
   
   
