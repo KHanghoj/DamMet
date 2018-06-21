@@ -1,9 +1,11 @@
 #include <string>
 #include <limits>
+#include <fstream>
 struct general_settings{
+  std::ofstream args_stream;
   std::string bam_fn, reference_fn, chrom;
-  std::string exclude_sites_fn, outbase, all_options, deamrates_filename;
-  std::string deamrates_f_rg;
+  std::string exclude_sites_fn, all_options, outbase, deamrates_filename;
+  std::string readgroups_f;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double het_rate;
   double M;
@@ -24,4 +26,4 @@ struct general_settings{
   }
 };
 
-general_settings args_parser( int argc, char* argv[] );
+void args_parser( int argc, char* argv[], general_settings & settings );

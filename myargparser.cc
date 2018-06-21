@@ -4,9 +4,7 @@
 #include <unistd.h>
 #include <sys/stat.h> // mkdir
 
-general_settings args_parser(int argc, char *argv[]) {
-
-  general_settings settings;
+void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
@@ -98,7 +96,7 @@ general_settings args_parser(int argc, char *argv[]) {
     case 'R':
       if (optarg){
         // one RG per line file
-        settings.deamrates_f_rg = std::string(optarg);
+        settings.readgroups_f = std::string(optarg);
       }
       break;
     case '?':
@@ -163,16 +161,14 @@ general_settings args_parser(int argc, char *argv[]) {
   ss += "\t-> Outbase (-O): " + settings.outbase + '\n';
   ss += "\t-> readFlags (-F): " + std::to_string(settings.flags_off) + '\n';
   ss += "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " + std::to_string(settings.cycles) + '\n';
-  if(!settings.deamrates_filename.empty()){
-    ss += "\t-> Using Precalc deamination rates from (-D): " + settings.deamrates_filename + '\n';
-  }
-  ss += "\t-> Using readgroups from file (-R): " + settings.deamrates_f_rg + '\n';
+  ss += "\t-> Using Precalc deamination rates from (-D): " + settings.deamrates_filename + '\n';
+  ss += "\t-> Using readgroups from file (-R): " + settings.readgroups_f + '\n';
   ss += "\t-> Exclude sites (-E): " + settings.exclude_sites_fn + '\n';
   
   ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
   ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
   
+  
   settings.all_options = ss;
   std::cerr << '\n' << ss;
-  return settings;
 }
