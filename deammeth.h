@@ -17,10 +17,13 @@ using keeplist_map = std::unordered_map<size_t, size_t>;
 
 // header management:
 // https://stackoverflow.com/a/2596554/2788987
-using dinucl_pair_of_pair = std::pair<std::pair<int, int>, std::pair<int, int> >;
+using dinucl_pair_of_pair = std::pair<
+  std::pair<int, int>, // first genotype
+  std::pair<int, int> // second genotype
+  >;
+
 using dinucl_pair_of_pairs = std::vector<dinucl_pair_of_pair>;
-using dinucl_pair = std::pair<int, int>;
-using dinucl_pairs = std::vector<dinucl_pair>;
+
 
 const double SMALLTOLERANCE = 1e-7;
 const size_t METHSTATES=2;
@@ -31,65 +34,73 @@ const size_t STRANDS=2;
 const size_t NUCLEOTIDES=4;
 
 // tmf: // readpos, prime, strand, refdinucl1, refdinucl2, sampledinucl1,sampledinucl2
-
-// FIXME: should be user specificed options
-double MIN_DINUCL_GENOTYPE_PROB = 0.0001;
-
 // FIXME: should reflect the presence of the observed base
 double BASE_FREQ_FLAT_PRIOR = 0.25;
 
-const dinucl_pairs GENERATE_DINUCL_PAIRS(){
-  dinucl_pairs res;
-  for (int i=0; i<4; i++){
-      for (int j=0; j<4; j++){
-        dinucl_pair temp (i,j);
-        res.push_back(temp);
-      }
+const std::vector<double> get_log_prior(){
+  std::vector<double> res(7, std::log(0));
+  res[0] = std::log(1);
+  for (const auto & val : res ){
+    std::cerr << val << '\n';
   }
   return res;
 }
 
-const dinucl_pairs ALL_DINUCL_PAIRS = GENERATE_DINUCL_PAIRS();
+const std::vector<double> get_log_prior_type_specific(){
+  std::cerr << "TYPE SPECIFIC" <<  std::endl;
+  std::vector<double> res(7, 0);
+  res[1] = 0.05;
+  res[2] = res[1];
+  res[3] = 0.001;
+  res[4] = res[3];
+  res[5] = res[3];
+  res[6] = res[3];
+  double s=0;
+  for (auto & val : res){
+    s+=val;
+    val=std::log(val);
+  }
+  res[0] = std::log(1-s);
+  return res;
+}
 
-dinucl_pair_of_pairs GENERATE_DINUCL_PAIR_OF_PAIRS(){
+const std::vector<double> get_log_prior_flat(){
+  std::vector<double> res(7, std::log(0.001/6));
+  res[0] = std::log(1-0.001);
+  return res;
+}
+
+const std::vector<double> LOG_PRIORS=get_log_prior();
+// const std::vector<double> LOG_PRIORS=get_log_prior_flat();
+// const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
+// const std::vector<double> PRIORS=get_prior();
+
+
+
+const dinucl_pair_of_pairs GENERATE_SEVEN_DINUCL_GENOTYPES(){
   dinucl_pair_of_pairs res;
-  res.reserve(ALL_DINUCL_PAIRS.size()*ALL_DINUCL_PAIRS.size());
-  for (auto it1=ALL_DINUCL_PAIRS.begin(); it1!=ALL_DINUCL_PAIRS.end(); it1++){
-    for (auto it2=it1; it2!=ALL_DINUCL_PAIRS.end(); it2++){
-      dinucl_pair_of_pair temp_res;
-      temp_res.first = *it1;
-      temp_res.second = *it2;
-      res.push_back(temp_res);
-    }
+
+  for (int i=0; i<7; i++){
+    dinucl_pair_of_pair di;
+    di.first.first=1;
+    di.first.second=1;
+    di.second.first=2;
+    di.second.second=2;
+    res.push_back(di);
   }
+  // see latex for explanation
+  // related to methylation
+  res[1].first.second=3;
+  res[2].second.second=0;
+  // unrelated to methylation:
+  res[3].first.second=0;
+  res[4].second.second=1;
+  res[5].first.second=2;
+  res[6].second.second=3;
   return res;
 }
+const dinucl_pair_of_pairs SEVEN_DINUCL_GENOTYPES = GENERATE_SEVEN_DINUCL_GENOTYPES();
 
-size_t find_pair_pair_idx(const int & r_base1, const int & r_base2, const int & s_base1, const int & s_base2){
-  size_t counter =0;
-  bool found = false;
-  for (const auto & pairs : GENERATE_DINUCL_PAIR_OF_PAIRS()) {
-    if (pairs.first.first == r_base1 && pairs.first.second == r_base2 && pairs.second.first == s_base1 && pairs.second.second == s_base2 ){
-      found = true;
-      break;
-    }
-    counter++;
-  }
-  if(!found){
-    std::cerr << "Could not find IDX " << r_base1 << r_base2 << " " << s_base1 << s_base2 << " EXITING " << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  return counter;
-}
-
-dinucl_pair_of_pairs ALL_DINUCL_PAIR_OF_PAIRS =  GENERATE_DINUCL_PAIR_OF_PAIRS();
-
-
-size_t IDX_CpG_CpG = find_pair_pair_idx(1,2,1,2);  // 81
-size_t IDX_CpG_CpA = find_pair_pair_idx(1,0,1,2);  // 60
-size_t IDX_CpG_TpG = find_pair_pair_idx(1,2,3,2);  // 89
-size_t IDX_TpG_TpG = find_pair_pair_idx(3,2,3,2);  // 133
-size_t IDX_CpA_CpA = find_pair_pair_idx(1,0,1,0);  // 58
 
 // as i provide rgs.size() this has to be a 'const type & val' or just 'type val'
 struct my_cov_rg {
@@ -101,17 +112,20 @@ struct my_cov_rg {
 } ;
 
 struct per_site {
-  size_t position, depth;
+  size_t position, depth, no_deam_CT_GA;
   size_t dinucl_max_idx;
+  bool exclude_for_deam;
   std::vector<int> prime, strand, pos_to_end;
   std::vector<std::pair<int, int>> bases;
-  std::vector<std::pair<int, int>> quals;
+  std::vector<std::pair<double, double>> quals;
   std::vector<size_t> base_compos;
   std::vector<double> seqerrors;
   std::vector<double> maperrors;
   std::vector<size_t> rgs;
   per_site(){
     depth=0;
+    no_deam_CT_GA=0;
+    exclude_for_deam=false;
   }
 } ;
 
@@ -136,6 +150,8 @@ struct per_site_nocpg {
 struct pre_calc_per_site {
   size_t position, depth;
   std::vector<double> maperrors, pre_noM, pre_M, summary;
+  std::vector<double> remaining_dinucl_genotypes;
+
   pre_calc_per_site(const per_site & d){
     summary.resize(3);
     depth=d.depth;
@@ -143,40 +159,10 @@ struct pre_calc_per_site {
     pre_noM.reserve(depth);
     pre_M.reserve(depth);
     maperrors.reserve(depth);
+    remaining_dinucl_genotypes.reserve(6);
   }
 } ;
 
-struct pre_calc_per_site2 {
-  size_t position, depth;
-  std::vector<double> maperrors, pre_noM, pre_M, summary;
-  pre_calc_per_site2(size_t & d, size_t & pos){
-    summary.resize(3);
-    depth=d;
-    position=pos;
-    pre_noM.reserve(depth);
-    pre_M.reserve(depth);
-    maperrors.reserve(depth);
-  }
-} ;
-
-// struct per_em_run {
-struct per_mle_run2 {
-  std::vector<size_t> idx_to_include, summary, positions;
-  size_t total_depth, min_pos, max_pos, curr_pos, n_cpgs;
-  per_mle_run2 (const pre_calc_per_site2 & d, const size_t & idx){
-    summary.resize(3);
-    for(size_t i=0; i<d.summary.size(); i++){
-      summary[i] = d.summary[i];
-    }
-    n_cpgs = 1;
-    idx_to_include.push_back(idx);
-    positions.push_back(d.position);
-    total_depth = d.depth;
-    min_pos = d.position;
-    max_pos = d.position;
-    curr_pos = d.position;
-  }
-} ;
 
 struct per_mle_run {
   std::vector<size_t> idx_to_include, summary, positions;
