@@ -1081,7 +1081,7 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
 
     log_like_genos = log_like_cgcg_geno + LOG_PRIORS[0];
     // summation of the likelihood of the remaining genotypes
-    for (auto it=site->remaining_dinucl_genotypes.begin()+1; it!=site->remaining_dinucl_genotypes.end(); it++){
+    for (auto it=site->remaining_dinucl_genotypes.begin(); it!=site->remaining_dinucl_genotypes.end(); it++){
        log_like_genos = oplusnatl(log_like_genos, *it);
     }
 
@@ -1139,7 +1139,7 @@ double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_
     geno_grad_der2 = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_der2 + (geno_grad * reads_grad);
     log_like_genos = log_like_cgcg_geno + LOG_PRIORS[0];
     // summation of the likelihood of the remaining genotypes
-    for (auto it=site->remaining_dinucl_genotypes.begin()+1; it!=site->remaining_dinucl_genotypes.end(); it++){
+    for (auto it=site->remaining_dinucl_genotypes.begin(); it!=site->remaining_dinucl_genotypes.end(); it++){
        log_like_genos = oplusnatl(log_like_genos, *it);
     }
 
@@ -1722,28 +1722,26 @@ int parse_bam(int argc, char * argv[]) {
                       [get_param_idx(settings.max_pos_to_end, UNMETHSTATE,
                                      site.pos_to_end[i], site.prime[i])];
         prob_g1 =
-            std::log((1 - site.maperrors[i]) *
-                         (0.5 * base_condition_one_genotype(
-                                    site.strand[i], deamin_unmethylated,
-                                    site.quals[i].first, site.bases[i].first,
-                                    it->first.first) +
-                          0.5 * base_condition_one_genotype(
-                                    site.strand[i], deamin_unmethylated,
-                                    site.quals[i].first, site.bases[i].first,
-                                    it->first.second)) +
-                     site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
+            // std::log((1 - site.maperrors[i]) *
+            0.5 * base_condition_one_genotype(
+                      site.strand[i], deamin_unmethylated, site.quals[i].first,
+                      site.bases[i].first, it->first.first) +
+            0.5 * base_condition_one_genotype(
+                      site.strand[i], deamin_unmethylated, site.quals[i].first,
+                      site.bases[i].first, it->first.second);
+        // + site.maperrors[i] * BASE_FREQ_FLAT_PRIOR; //);
         prob_g2 =
-            std::log((1 - site.maperrors[i]) *
-                         (0.5 * base_condition_one_genotype(
-                                    site.strand[i], deamin_unmethylated,
-                                    site.quals[i].second, site.bases[i].second,
-                                    it->second.first) +
-                          0.5 * base_condition_one_genotype(
-                                    site.strand[i], deamin_unmethylated,
-                                    site.quals[i].second, site.bases[i].second,
-                                    it->second.second)) +
-                     site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
-        res += prob_g1 + prob_g2;
+            // std::log((1 - site.maperrors[i]) *
+            0.5 * base_condition_one_genotype(
+                      site.strand[i], deamin_unmethylated, site.quals[i].second,
+                      site.bases[i].second, it->second.first) +
+            0.5 * base_condition_one_genotype(
+                      site.strand[i], deamin_unmethylated, site.quals[i].second,
+                      site.bases[i].second,
+                      it->second.second);
+        // + site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
+        res += std::log((1-site.maperrors[i]) * (prob_g1 * prob_g2) +
+                        site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
       }
       size_t idx_prior = std::distance(SEVEN_DINUCL_GENOTYPES.begin(), it);
       d.remaining_dinucl_genotypes.push_back(res + LOG_PRIORS[idx_prior]);      
