@@ -1380,18 +1380,24 @@ double calc_prob_obs_base(const double & seqerror, const size_t & base_compos, c
   return res;
 }
 
-void mark_no_deam_CT_GA(std::vector<per_site> & data){
+void mark_no_deam_CT_GA(general_settings & settings, std::vector<per_site> & data){
   std::default_random_engine generator;
   std::uniform_real_distribution<double> distribution(0.0,1.0);
+
+  std::string filename = settings.outbase +".excludedCpGs";
+  std::ofstream f (filename.c_str());
+  checkfilehandle(f, filename);
+
+  
   for (auto & site: data){
     double prob_seqerrors=1;
     for (size_t i=0; i<site.depth; i++){
-      // + strand and g->a on second pos
+      // + strand and g->a 
       if(site.strand[i]==0 && site.bases[i].second==0){
 	site.no_deam_CT_GA++;
 	prob_seqerrors *= site.seqerrors[i]/3.0;
       }
-      // - strand and g->a on first pos
+      // - strand and c->t 
       if(site.strand[i]==1 && site.bases[i].first==3){
 	site.no_deam_CT_GA++;
 	prob_seqerrors *= site.seqerrors[i]/3.0;
@@ -1401,6 +1407,7 @@ void mark_no_deam_CT_GA(std::vector<per_site> & data){
     double accept_val = distribution(generator);
     if(site.no_deam_CT_GA>1 && accept_val>prob_seqerrors){
       site.exclude_for_deam = true;
+      f << settings.chrom << " " << site.position << '\n';
     }
   }
 }
@@ -1619,7 +1626,7 @@ int parse_bam(int argc, char * argv[]) {
     tmf[i] = read_count_file(settings, rgs[i]);
   }
 
-  mark_no_deam_CT_GA(data);
+  mark_no_deam_CT_GA(settings, data);
 
   std::vector<std::vector<double>> param_deam;
   param_deam.resize(rgs.size());
