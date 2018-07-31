@@ -979,9 +979,6 @@ void update_mle_data(per_mle_run & mle_data, const pre_calc_per_site & data, siz
   } else {
     std::cerr << mle_data.curr_pos << " " << mle_data.min_pos << " " << mle_data.max_pos << " NOT GOOD POSITION " << data.position << '\n';
   }
-  for(size_t i=0; i<data.summary.size(); i++){
-    mle_data.summary[i] += data.summary[i];
-  }
 }
 
 double objective_func_F_haploid(const std::vector<double> &x, std::vector<double> &grad, void *my_func_data){
@@ -1316,8 +1313,6 @@ void run_mle(general_settings & settings,
       }
       f << '\n';
 
-    //   << " Stats: " << mle_data.summary[0] << "," << mle_data.summary[1] << "," << mle_data.summary[2]
-    
     // // // checking that the derivative is correct
     // double tmp_ll;
     // for (double fval=0.0; fval<=1; fval+=0.01){
@@ -1333,6 +1328,77 @@ void run_mle(general_settings & settings,
     // exit(EXIT_SUCCESS);
     
       
+  }
+  f << std::flush;
+  f.close();
+}
+
+void run_mle_bed(general_settings & settings,
+		 std::vector<pre_calc_per_site> & pre_calc_data,
+		 std::vector<std::pair<size_t, size_t>> & bed_coord) {
+  std::string filename = settings.outbase + ".BED.F";
+  std::ofstream f (filename.c_str());
+  checkfilehandle(f, filename);
+  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
+  nlopt::opt opt(nlopt::LD_MMA, 1);
+  std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+  opt.set_lower_bounds(lb);
+  opt.set_upper_bounds(up);
+  opt.set_xtol_abs(0);
+  opt.set_ftol_abs(1e-15);
+  opt.set_xtol_rel(0);
+  opt.set_ftol_rel(0);
+  for (const auto & bed : bed_coord){
+    std::vector<size_t> sites_to_include;
+    for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
+      if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
+	sites_to_include.push_back(curr_idx);
+      }
+      if(pre_calc_data[curr_idx].position >= bed.second){
+	break;
+      }
+    }
+
+    // it is stupid to run over data again, but too tired to make new structs for the BED setup.
+    // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
+    per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
+    for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
+      update_mle_data(mle_data, pre_calc_data[*it], *it); 
+    }
+    double minf;
+    F_void void_stuff(&settings, &pre_calc_data, &mle_data);
+    std::vector<double> param (1, 0.5);
+    nlopt::result result;
+    double second_der, error;
+    size_t iterations;
+      
+    if(do_haploid_model){ 
+      opt.set_max_objective(objective_func_F_haploid, &void_stuff);
+      result = opt.optimize(param, minf);
+      second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
+    } else {
+      opt.set_max_objective(objective_func_F, &void_stuff);
+      result = opt.optimize(param, minf);
+      second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
+    }
+    error = 1.96/std::sqrt(-second_der);
+    iterations=void_stuff.iteration;
+
+    f << settings.chrom << ":" << bed.first<<"-"<<bed.second
+      << " N_CpGs: " << mle_data.n_cpgs
+      << " Depth: " << mle_data.total_depth
+      << " Distance: " << mle_data.max_pos - mle_data.min_pos
+      << " ll: " << minf
+      << " f: " << param[0]
+      << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
+      << " iterations: " << iterations
+      << " optim_return_code: " << result
+      << " Incl_pos: " << mle_data.positions[0];
+      for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
+	f << ","<< *i;
+      }
+      f << '\n';
+
   }
   f << std::flush;
   f.close();
@@ -1412,15 +1478,97 @@ void mark_no_deam_CT_GA(general_settings & settings, std::vector<per_site> & dat
   }
 }
 
+void update_dinucl_priors(general_settings & settings){
+  std::vector<double> res;
+  std::stringstream ss( settings.priors_str );
+  double val, sum=0;
+  while( ss.good() ){
+    std::string substr;
+    getline( ss, substr, ',' );
+    val = std::stod(substr);
+    sum+=val;
+    res.push_back( val );
+  }
+  if (res.size() != LOG_PRIORS.size()){
+    std::cerr << "\t -> ERROR: provide a string of seven prior e.g. -h 1,0,0,0,0,0,0" << '\n';
+    exit(EXIT_FAILURE);
+  }
+
+  // for (const auto & val : LOG_PRIORS){
+  //   std::cerr << val << '\n';
+  // }
+  
+  for (size_t i=0; i<res.size(); i++){
+    LOG_PRIORS[i] = std::log(res[i]/sum);
+  }
+  
+  // for (const auto & val : LOG_PRIORS){
+  //   std::cerr << val << '\n';
+  // }
+  
+}
+  
+
+void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, size_t>> & res){
+  std::string filename = settings.bed_f;
+  std::ifstream f (filename.c_str());
+  checkfilehandle(f, filename);
+  if(f.is_open()){
+    std::string row;
+    std::string chrom;
+    size_t start,end ;
+    std::stringstream ss;
+    while(getline(f, row)){
+      if(row.empty()){
+	std::cerr << "BED: "<< settings.bed_f << " contains empty rows. EXITING" << '\n';
+	exit(EXIT_FAILURE); 
+      }
+      ss.str(row);
+      
+      ss >> chrom >> start >> end;
+      if(chrom==settings.chrom){
+	res.push_back(std::make_pair (start,end));
+      }
+      ss.clear();
+    }
+  }
+  f.close();
+}
+
 int parse_bam(int argc, char * argv[]) {
   time_t start_time, end_time;
   time(&start_time);
   general_settings settings; 
   args_parser(argc, argv, settings);
+  
+  // update priors if provided
+  if(!settings.priors_str.empty()){
+    update_dinucl_priors(settings);
+  }
+  
   std::string stream_filename (settings.outbase+".args");
   settings.args_stream.open(stream_filename.c_str());
   checkfilehandle(settings.args_stream, stream_filename);
   settings.args_stream << settings.all_options;
+
+
+  // write priors to log
+  std::cerr << "\t-> PRIORS (-h): " << std::exp(LOG_PRIORS[0]);
+  settings.args_stream  << "\t-> PRIORS (-h): " << std::exp(LOG_PRIORS[0]);
+  for (auto it=LOG_PRIORS.begin()+1; it!=LOG_PRIORS.end();it++){
+    std::cerr  << "," << std::exp(*it);
+    settings.args_stream  << "," << std::exp(*it);
+  }
+  std::cerr << '\n';
+  settings.args_stream << '\n';
+
+
+  std::vector<std::pair<size_t, size_t>> bed_coord;
+  // parsing bedfile if provided
+  if(!settings.bed_f.empty()){
+    parse_bed_file(settings, bed_coord);
+    std::cerr << "Kept: " << bed_coord.size() << " regions on chrom: " << settings.chrom << '\n';
+  }
 
   // open BAM for reading
   samFile *in = sam_open(settings.bam_fn.c_str(), "r");
@@ -1626,7 +1774,7 @@ int parse_bam(int argc, char * argv[]) {
     tmf[i] = read_count_file(settings, rgs[i]);
   }
 
-  mark_no_deam_CT_GA(settings, data);
+  // mark_no_deam_CT_GA(settings, data);
 
   std::vector<std::vector<double>> param_deam;
   param_deam.resize(rgs.size());
@@ -1718,8 +1866,6 @@ int parse_bam(int argc, char * argv[]) {
       d.pre_M.push_back(M);
 
       d.maperrors.push_back(site.maperrors[i]);
-
-      d.summary[site.base_compos[i]]++;
     }
     for (auto it=SEVEN_DINUCL_GENOTYPES.begin()+1; it!=SEVEN_DINUCL_GENOTYPES.end(); it++){
       double res=0;
@@ -1756,9 +1902,16 @@ int parse_bam(int argc, char * argv[]) {
     mle_data.push_back(d);
   }
   data.clear();
-  std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
-  settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
-  run_mle(settings, mle_data);
+  if(settings.bed_f.empty()){
+    std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
+    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
+    run_mle(settings, mle_data);
+
+  } else {
+    std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
+    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
+    run_mle_bed(settings, mle_data, bed_coord);
+  }
   std::cerr << "\t-> Cleaning up." << '\n';
   mle_data.clear();
   free(ref);

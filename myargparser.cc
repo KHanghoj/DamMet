@@ -8,7 +8,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
-  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:C:P:D:h:O:M:W:N:L:R:")) != -1) {
+  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:C:P:D:h:O:M:W:N:L:R:B:")) != -1) {
     switch (c) {
     case 'b':
       if (optarg)
@@ -61,7 +61,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       break;
     case 'h':
       if (optarg){
-        settings.het_rate = atof(optarg);
+        settings.priors_str = std::string(optarg);
       }
       break;
     case 'O':
@@ -99,6 +99,12 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         settings.readgroups_f = std::string(optarg);
       }
       break;
+    case 'B':
+      if (optarg){
+        // one RG per line file
+        settings.bed_f = std::string(optarg);
+      }
+      break;
     case '?':
       std::cerr << "FUCKED BIGTIME" << '\n';
       exit(EXIT_FAILURE);
@@ -132,16 +138,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     exit(EXIT_FAILURE);
   }
 
-  if(settings.het_rate > 1){
-    std::cerr << "Heterozygosity prior must be between 0 and 1. Can be set to -1 for uniform prior" << '\n';
-    exit(EXIT_FAILURE);
-  }
-
-  if(settings.het_rate < 0){
-    std::cerr << "using a uniform prior for heterozygosity estimates" << '\n';
-    settings.het_rate=-1;
-  }
-
   if(settings.minmapQ < 1){
     settings.minmapQ=1;
   }
@@ -153,6 +149,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
   ss += "\t-> REF (-r): " + settings.reference_fn + '\n';
   ss += "\t-> Chromosome (-c): " + settings.chrom + '\n';
+  ss += "\t-> BED file (-B): " + settings.bed_f + '\n';
   ss += "\t-> minmapQ (-q): " + std::to_string(settings.minmapQ) + '\n';
   ss += "\t-> minbaseQ (-Q): " + std::to_string(settings.minbaseQ) + '\n';
   ss += "\t-> MinReadLength (-L): " + std::to_string(settings.minreadlength) + '\n';

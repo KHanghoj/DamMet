@@ -37,40 +37,40 @@ const size_t NUCLEOTIDES=4;
 // FIXME: should reflect the presence of the observed base
 double BASE_FREQ_FLAT_PRIOR = 0.25;
 
-const std::vector<double> get_log_prior(){
+std::vector<double> get_log_prior(){
   std::vector<double> res(7, std::log(0));
   res[0] = std::log(1);
-  for (const auto & val : res ){
-    std::cerr << val << '\n';
-  }
+  /* for (const auto & val : res ){ */
+  /*   std::cerr << val << '\n'; */
+  /* } */
   return res;
 }
 
-const std::vector<double> get_log_prior_type_specific(){
-  std::cerr << "TYPE SPECIFIC" <<  std::endl;
-  std::vector<double> res(7, 0);
-  res[1] = 0.05;
-  res[2] = res[1];
-  res[3] = 0.001;
-  res[4] = res[3];
-  res[5] = res[3];
-  res[6] = res[3];
-  double s=0;
-  for (auto & val : res){
-    s+=val;
-    val=std::log(val);
-  }
-  res[0] = std::log(1-s);
-  return res;
-}
-
-const std::vector<double> get_log_prior_flat(){
-  std::vector<double> res(7, std::log(0.001/6));
+std::vector<double> get_log_prior_flat(){
+  std::vector<double> res(7, std::log(0.001/6.0));
   res[0] = std::log(1-0.001);
   return res;
 }
 
-const std::vector<double> LOG_PRIORS=get_log_prior();
+/* std::vector<double> get_log_prior_type_specific(){ */
+/*   std::cerr << "TYPE SPECIFIC" <<  std::endl; */
+/*   std::vector<double> res(7, 0); */
+/*   res[1] = 0.05; */
+/*   res[2] = res[1]; */
+/*   res[3] = 0.001; */
+/*   res[4] = res[3]; */
+/*   res[5] = res[3]; */
+/*   res[6] = res[3]; */
+/*   double s=0; */
+/*   for (auto & val : res){ */
+/*     s+=val; */
+/*     val=std::log(val); */
+/*   } */
+/*   res[0] = std::log(1-s); */
+/*   return res; */
+/* } */
+
+std::vector<double> LOG_PRIORS=get_log_prior_flat();
 // const std::vector<double> LOG_PRIORS=get_log_prior_flat();
 // const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
 // const std::vector<double> PRIORS=get_prior();
@@ -149,11 +149,10 @@ struct per_site_nocpg {
 
 struct pre_calc_per_site {
   size_t position, depth;
-  std::vector<double> maperrors, pre_noM, pre_M, summary;
+  std::vector<double> maperrors, pre_noM, pre_M;
   std::vector<double> remaining_dinucl_genotypes;
 
   pre_calc_per_site(const per_site & d){
-    summary.resize(3);
     depth=d.depth;
     position=d.position;
     pre_noM.reserve(depth);
@@ -165,13 +164,9 @@ struct pre_calc_per_site {
 
 
 struct per_mle_run {
-  std::vector<size_t> idx_to_include, summary, positions;
+  std::vector<size_t> idx_to_include, positions;
   size_t total_depth, min_pos, max_pos, curr_pos, n_cpgs;
   per_mle_run (const pre_calc_per_site & d, const size_t & idx){
-    summary.resize(3);
-    for(size_t i=0; i<d.summary.size(); i++){
-      summary[i] = d.summary[i];
-    }
     n_cpgs = 1;
     idx_to_include.push_back(idx);
     positions.push_back(d.position);
