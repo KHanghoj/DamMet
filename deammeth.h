@@ -36,6 +36,7 @@ const size_t NUCLEOTIDES=4;
 // tmf: // readpos, prime, strand, refdinucl1, refdinucl2, sampledinucl1,sampledinucl2
 // FIXME: should reflect the presence of the observed base
 double BASE_FREQ_FLAT_PRIOR = 0.25;
+double DINUCL_FLAT_PRIOR = 1.0/7.0;
 
 std::vector<double> get_log_prior(){
   std::vector<double> res(7, std::log(0));

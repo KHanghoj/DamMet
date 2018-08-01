@@ -1058,7 +1058,7 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
       M = site->pre_M[i];
       mape = site->maperrors[i];
       read_der = (1-mape) * (M - noM);
-      read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*BASE_FREQ_FLAT_PRIOR;
+      read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*DINUCL_FLAT_PRIOR;
       log_like_cgcg_geno += std::log(read_like);
       if(!grad.empty()){
 	// d/df per read
@@ -1113,11 +1113,11 @@ double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_
       mape = site->maperrors[i];
 
       read_der = (1-mape) * (M - noM);
-      read_like = (1-mape) * ((1-f) * noM + f * M) + mape*BASE_FREQ_FLAT_PRIOR;
+      read_like = (1-mape) * ((1-f) * noM + f * M) + mape*DINUCL_FLAT_PRIOR;
       reads_grad += read_der/read_like;
 
       numerator_read_der2 = std::pow((1-mape),2) * std::pow((M - noM),2);
-      denominator_read_der2 = std::pow((1-mape) * (noM * (1-f) + f * M) + mape*BASE_FREQ_FLAT_PRIOR, 2);
+      denominator_read_der2 = std::pow((1-mape) * (noM * (1-f) + f * M) + mape*DINUCL_FLAT_PRIOR, 2);
       reads_der2 += - (numerator_read_der2 / denominator_read_der2);
       // \frac{\partial }{\partial \:x^2}\left(ln\left(\left(1-w\right)\cdot \left(\left(1-x\right)\:\cdot \:n\:+\:\left(x\:\cdot \:M\right)\right)\:+\:w\cdot \:p\right)\:\:\right)
       
@@ -1125,7 +1125,7 @@ double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_
       // https://www.symbolab.com/
       // wolfram: second derivative ln((1-w)*((1-x) * k + (x * h)) + w*p)
       // second derivative:
-      // second_der += (std::pow((1-mape),2) * std::pow((M - noM),2)) / std::pow((-M * (mape-1) * f + noM * (mape-1) * (1-f) + mape*BASE_FREQ_FLAT_PRIOR), 2);
+      // second_der += (std::pow((1-mape),2) * std::pow((M - noM),2)) / std::pow((-M * (mape-1) * f + noM * (mape-1) * (1-f) + mape*DINUCL_FLAT_PRIOR), 2);
     }
     // exp(log_like_cgcg_geno + LOG_PRIORS) * d/df all_reads. this is only including cgcg as the derivatives of the remaining are 0 as they are unrelated to F.
     
@@ -1882,7 +1882,7 @@ int parse_bam(int argc, char * argv[]) {
             0.5 * base_condition_one_genotype(
                       site.strand[i], deamin_unmethylated, site.quals[i].first,
                       site.bases[i].first, it->first.second);
-        // + site.maperrors[i] * BASE_FREQ_FLAT_PRIOR; //);
+        // + site.maperrors[i] * DINUCL_FLAT_PRIOR; //);
         prob_g2 =
             // std::log((1 - site.maperrors[i]) *
             0.5 * base_condition_one_genotype(
@@ -1892,9 +1892,9 @@ int parse_bam(int argc, char * argv[]) {
                       site.strand[i], deamin_unmethylated, site.quals[i].second,
                       site.bases[i].second,
                       it->second.second);
-        // + site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
+        // + site.maperrors[i] * DINUCL_FLAT_PRIOR);
         res += std::log((1-site.maperrors[i]) * (prob_g1 * prob_g2) +
-                        site.maperrors[i] * BASE_FREQ_FLAT_PRIOR);
+                        site.maperrors[i] * DINUCL_FLAT_PRIOR);
       }
       size_t idx_prior = std::distance(SEVEN_DINUCL_GENOTYPES.begin(), it);
       d.remaining_dinucl_genotypes.push_back(res + LOG_PRIORS[idx_prior]);      
