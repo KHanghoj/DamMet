@@ -1358,13 +1358,24 @@ void run_mle_bed(general_settings & settings,
 	break;
       }
     }
-
+    if( sites_to_include.size()==0){
+      f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
+      continue;
+    }
+    
     // it is stupid to run over data again, but too tired to make new structs for the BED setup.
     // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
     per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
     for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
       update_mle_data(mle_data, pre_calc_data[*it], *it); 
     }
+    if(mle_data.total_depth == 0){
+      f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
+      continue;
+    }
+
+      
+
     double minf;
     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
     std::vector<double> param (1, 0.5);
@@ -1567,7 +1578,8 @@ int parse_bam(int argc, char * argv[]) {
   // parsing bedfile if provided
   if(!settings.bed_f.empty()){
     parse_bed_file(settings, bed_coord);
-    std::cerr << "Kept: " << bed_coord.size() << " regions on chrom: " << settings.chrom << '\n';
+    std::cerr << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
+    settings.args_stream << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
   }
 
   // open BAM for reading
