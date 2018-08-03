@@ -132,8 +132,9 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     settings.outbase += "/"+settings.chrom;
   }
 
-  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() ){
-    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize)" << '\n';
+  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
+    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+
     std::cerr << "EXITING...." << '\n';
     exit(EXIT_FAILURE);
   }
