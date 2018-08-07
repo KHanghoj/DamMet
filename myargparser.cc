@@ -115,8 +115,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
       settings.chrom.empty()) {
     std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
-                 "fasta)\n\t->-c (chromosome of interest)\n\t->-C (read/dump "
-                 "count table)"
+                 "fasta)\n\t->-c (chromosome of interest)"
               << '\n';
     exit(EXIT_FAILURE);
   }

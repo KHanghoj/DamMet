@@ -850,7 +850,9 @@ void run_deamrates_optim(general_settings & settings, const tally_mat_freq & tmf
   std::vector<double> t; // just a dummy
   f << "##Initial (param are freq from tallycounts file) llh: " << objective_func_deamrates(param, t, &void_stuff) << std::endl;
   size_t n_params = PRIMES * ( settings.max_pos_to_end+2) * PRIMES ;
+  // after 2000+ iterations (many minutes) : BOBYQA -239892
   // nlopt::opt opt(nlopt::LN_BOBYQA, n_params);
+  // 100 iterations (60 seconds) : -239892
   nlopt::opt opt(nlopt::LD_MMA, n_params);
 
   // std::vector<double> lb(n_params, SMALLTOLERANCE), up(n_params, 1-SMALLTOLERANCE);
@@ -905,13 +907,37 @@ std::vector<size_t> load_pos_per_chrom(std::string & filename, const std::string
   return res;
 }
 
-void filter_ref_db(const std::string & chrom, std::string & filename, char * ref){
+void filter_ref_db_old(const std::string & chrom, std::string & filename, char * ref){
   std::vector<size_t> pos = load_pos_per_chrom(filename, chrom);
   for (const auto & val : pos){
     // std::cout << val << " " << ref[val] << '\n';
     ref[val] = 'N';
   }
 }
+
+
+void filter_ref_BED(const std::string & selected_chrom, std::string & filename, char * ref){
+  std::ifstream f (filename.c_str());
+  checkfilehandle(f, filename);
+  if(f.is_open()){
+    std::string row, chrom;
+    size_t start, end;
+    std::stringstream ss;
+    while(getline(f, row)){
+      ss.str(row);
+      ss >> chrom >> start >> end;
+      if(chrom == selected_chrom){
+	for(size_t val=start; val<end; val++){
+	  ref[val] = 'N';
+	}
+      }
+      ss.clear();
+    }
+  }
+  f.close();
+}
+  
+
 
 std::vector<double> load_deamrates(general_settings & settings, std::string & rg){
   size_t max_length = PRIMES*(settings.max_pos_to_end+2)*PRIMES ;
@@ -1660,9 +1686,9 @@ int parse_bam(int argc, char * argv[]) {
 
   // with true, it works like a charm
   if (!settings.exclude_sites_fn.empty()) {
-    std::cerr << "\t-> Loading file to mask genomic sites sites" << '\n';
-    settings.args_stream << "\t-> Loading file to mask genomic sites sites" << '\n';
-    filter_ref_db(settings.chrom, settings.exclude_sites_fn, ref);
+    std::cerr << "\t-> Loading file to mask genomic sites sites (-E). Still using the old format. the code is available for using a BED format. just change filter_ref_db_old to filter_ref_db_BED" << '\n';
+    settings.args_stream << "\t-> Loading file to mask genomic sites sites (-E) " << '\n';
+    filter_ref_db_old(settings.chrom, settings.exclude_sites_fn, ref);
   }
 
   std::vector<tally_mat_freq> tmf;
