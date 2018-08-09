@@ -1606,6 +1606,12 @@ int parse_bam(int argc, char * argv[]) {
     parse_bed_file(settings, bed_coord);
     std::cerr << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
     settings.args_stream << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
+    
+    if(bed_coord.size()==0){
+      std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
+      exit(EXIT_FAILURE);      
+    }
+
   }
 
   // open BAM for reading
@@ -1659,6 +1665,8 @@ int parse_bam(int argc, char * argv[]) {
       rgs.push_back(rg);
       cycles.push_back(cycle);
       ss.clear();
+      rg.clear();
+      cycle_string.clear();
     }
     f.close();
   } else {
