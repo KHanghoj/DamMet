@@ -8,7 +8,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
-  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:C:P:D:h:O:M:W:N:L:R:B:")) != -1) {
+  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:C:P:D:h:O:M:W:N:L:R:B:l:")) != -1) {
     switch (c) {
     case 'b':
       if (optarg)
@@ -93,6 +93,12 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         settings.minreadlength = atoi(optarg);
       }
       break;
+    case 'l':
+      if (optarg){
+        // windowsize
+        settings.minreadlength_deam = atoi(optarg);
+      }
+      break;
     case 'R':
       if (optarg){
         // one RG per line file
@@ -115,9 +121,24 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
       settings.chrom.empty()) {
     std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
-                 "fasta)\n\t->-c (chromosome of interest)"
-              << '\n';
-    exit(EXIT_FAILURE);
+                 "fasta)\n\t->-c (chromosome of interest)" << '\n';
+    std::cerr << "OPTIONS:" << std::endl;
+      std::cerr << "\t-> BED file (-B): " << std::endl;
+      std::cerr << "\t-> minmapQ (-q): " << std::endl;
+      std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
+      std::cerr << "\t-> MinReadLength (-L): " << std::endl;
+      std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+      std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
+      std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
+    std::cerr << "\t-> Outbase (-O): " << std::endl;
+    std::cerr << "\t-> readFlags (-F): " << std::endl;
+    std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
+    std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
+    std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
+    std::cerr << "\t-> Exclude sites (-E): " << std::endl;
+    std::cerr << "\t-> WindowSize (-W): " << std::endl;
+    std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+    exit(EXIT_SUCCESS);
   }
 
   if(settings.M < 0 || settings.M > 1){
@@ -133,7 +154,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
 
   if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
     std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
-
     std::cerr << "EXITING...." << '\n';
     exit(EXIT_FAILURE);
   }
@@ -145,14 +165,20 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     settings.minbaseQ=1;
   }
 
+  if(settings.minreadlength_deam==std::numeric_limits<size_t>::max()){
+    settings.minreadlength_deam=settings.minreadlength;
+  }
+
   std::string ss("");
   ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
   ss += "\t-> REF (-r): " + settings.reference_fn + '\n';
   ss += "\t-> Chromosome (-c): " + settings.chrom + '\n';
+
   ss += "\t-> BED file (-B): " + settings.bed_f + '\n';
   ss += "\t-> minmapQ (-q): " + std::to_string(settings.minmapQ) + '\n';
   ss += "\t-> minbaseQ (-Q): " + std::to_string(settings.minbaseQ) + '\n';
   ss += "\t-> MinReadLength (-L): " + std::to_string(settings.minreadlength) + '\n';
+  ss += "\t-> MinReadLength_deamrates (-l): " + std::to_string(settings.minreadlength_deam) + '\n';
   ss += "\t-> Max_Pos_From_End (-P): " + std::to_string(settings.max_pos_to_end+1) + '\n';
   ss += "\t-> Expected fraction of methylated CpGs (-M): " + std::to_string(settings.M) + '\n';
   ss += "\t-> Outbase (-O): " + settings.outbase + '\n';
@@ -161,10 +187,8 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Using Precalc deamination rates from (-D): " + settings.deamrates_filename + '\n';
   ss += "\t-> Using readgroups from file (-R): " + settings.readgroups_f + '\n';
   ss += "\t-> Exclude sites (-E): " + settings.exclude_sites_fn + '\n';
-  
   ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
   ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
-  
   
   settings.all_options = ss;
   std::cerr << '\n' << ss;

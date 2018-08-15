@@ -119,6 +119,7 @@ struct per_site {
   std::vector<int> prime, strand, pos_to_end;
   std::vector<std::pair<int, int>> bases;
   std::vector<std::pair<double, double>> quals;
+  std::vector<size_t> readlengths;
   std::vector<size_t> base_compos;
   std::vector<double> seqerrors;
   std::vector<double> maperrors;
@@ -136,6 +137,7 @@ struct per_site_nocpg {
   std::vector<size_t> base_compos;
   std::vector<double> seqerrors;
   std::vector<double> maperrors;
+  std::vector<size_t> readlengths;
   std::vector<size_t> rgs;
   per_site_nocpg(size_t & max_data_points_to_include){
     depth=0;
@@ -144,6 +146,7 @@ struct per_site_nocpg {
     base_compos.reserve(max_data_points_to_include);
     seqerrors.reserve(max_data_points_to_include);
     maperrors.reserve(max_data_points_to_include);
+    std::vector<size_t> readlengths;
     rgs.reserve(max_data_points_to_include);
   }
 } ;

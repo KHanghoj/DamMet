@@ -426,7 +426,8 @@ void add_aligned_data(general_settings &settings,
                       per_site_nocpg &nocpg_data,
 		      my_cov_rg & cov_rg,
 		      size_t & rg_idx,
-		      size_t & ncycles) {
+		      size_t & ncycles,
+		      size_t & exclude_CnonCpG) {
 
   size_t b1, b2;
   int r_base1, r_base2, s_base1, s_base2;
@@ -490,13 +491,14 @@ void add_aligned_data(general_settings &settings,
       }
 
       if(no_ref_cpg(r_base1, r_base2)){
-        if(refToInt[(int)ref[d.t_positions[b2]]]==2 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx]){
+        if(refToInt[(int)ref[d.t_positions[b2]]]==2 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx] && exclude_CnonCpG==0){
           nocpg_data.pos_to_end.push_back(pos);
           nocpg_data.prime.push_back(prime);
           nocpg_data.base_compos.push_back(base_composition);
           nocpg_data.seqerrors.push_back(seqerror);
           nocpg_data.maperrors.push_back(maperror);
 	  nocpg_data.rgs.push_back(rg_idx);
+	  nocpg_data.readlengths.push_back(d.n_nucleotides);
 	  nocpg_data.depth++;
 	  cov_rg.nocpg[rg_idx]++;
         }
@@ -547,12 +549,13 @@ void add_aligned_data(general_settings &settings,
       }
 
       if(no_ref_cpg(r_base1, r_base2)){
-        if(refToInt[(int)ref[d.t_positions[b1]]]==1 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx]){
+        if(refToInt[(int)ref[d.t_positions[b1]]]==1 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx] && exclude_CnonCpG==0){
           nocpg_data.pos_to_end.push_back(pos);
           nocpg_data.prime.push_back(prime);
           nocpg_data.base_compos.push_back(base_composition);
           nocpg_data.seqerrors.push_back(seqerror);
           nocpg_data.maperrors.push_back(maperror);
+	  nocpg_data.readlengths.push_back(d.n_nucleotides);
 	  nocpg_data.rgs.push_back(rg_idx);
 	  nocpg_data.depth++;
 	  cov_rg.nocpg[rg_idx]++;
@@ -578,6 +581,7 @@ void add_aligned_data(general_settings &settings,
       p_per_site->base_compos.push_back(base_composition);
       p_per_site->seqerrors.push_back(seqerror);
       p_per_site->maperrors.push_back(maperror);
+      p_per_site->readlengths.push_back(d.n_nucleotides);
       p_per_site->rgs.push_back(rg_idx);
       cov_rg.cpg[rg_idx]++;
       p_per_site->bases.push_back(std::make_pair(s_base1, s_base2));
@@ -828,7 +832,7 @@ void run_deamrates_optim(general_settings & settings, const tally_mat_freq & tmf
   std::vector<size_t> nocpg_idx;
   nocpg_idx.reserve(cov_rg.nocpg[rg_idx]);
   for (size_t i=0; i<nocpg_data.depth; i++){
-    if(nocpg_data.rgs[i] == rg_idx){
+    if(nocpg_data.rgs[i] == rg_idx && nocpg_data.readlengths[i]>=settings.minreadlength_deam){
       nocpg_idx.push_back(i);
     }
   }
@@ -837,7 +841,7 @@ void run_deamrates_optim(general_settings & settings, const tally_mat_freq & tmf
   cpg_idx.resize(data.size());
   for (size_t site=0; site<data.size(); site++){
     for(size_t i=0; i<data[site].depth; i++){
-      if(data[site].rgs[i]==rg_idx){
+      if(data[site].rgs[i]==rg_idx && data[site].readlengths[i]>=settings.minreadlength_deam){
 	cpg_idx[site].push_back(i);
       }
     }
@@ -1195,6 +1199,8 @@ void run_mle(general_settings & settings,
   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
   nlopt::opt opt(nlopt::LD_MMA, 1);
   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+
+  opt.set_maxeval(1000);
   opt.set_lower_bounds(lb);
   opt.set_upper_bounds(up);
   opt.set_xtol_abs(0);
@@ -1368,6 +1374,7 @@ void run_mle_bed(general_settings & settings,
   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
   nlopt::opt opt(nlopt::LD_MMA, 1);
   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+  opt.set_maxeval(1000);
   opt.set_lower_bounds(lb);
   opt.set_upper_bounds(up);
   opt.set_xtol_abs(0);
@@ -1377,12 +1384,15 @@ void run_mle_bed(general_settings & settings,
   for (const auto & bed : bed_coord){
     std::vector<size_t> sites_to_include;
     for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
+
       if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
+
 	sites_to_include.push_back(curr_idx);
       }
       if(pre_calc_data[curr_idx].position >= bed.second){
 	break;
       }
+
     }
     if( sites_to_include.size()==0){
       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
@@ -1395,12 +1405,11 @@ void run_mle_bed(general_settings & settings,
     for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
       update_mle_data(mle_data, pre_calc_data[*it], *it); 
     }
+
     if(mle_data.total_depth == 0){
       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
       continue;
     }
-
-      
 
     double minf;
     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
@@ -1420,7 +1429,7 @@ void run_mle_bed(general_settings & settings,
     }
     error = 1.96/std::sqrt(-second_der);
     iterations=void_stuff.iteration;
-
+    
     f << settings.chrom << ":" << bed.first<<"-"<<bed.second
       << " N_CpGs: " << mle_data.n_cpgs
       << " Depth: " << mle_data.total_depth
@@ -1434,10 +1443,9 @@ void run_mle_bed(general_settings & settings,
       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
 	f << ","<< *i;
       }
-      f << '\n';
+      f << std::endl;
 
   }
-  f << std::flush;
   f.close();
 }
 
@@ -1563,6 +1571,10 @@ void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, s
       ss.str(row);
       
       ss >> chrom >> start >> end;
+      if(start>=end || start<0){
+	std::cerr << "BED: "<< settings.bed_f << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
+	exit(EXIT_FAILURE); 
+      }
       if(chrom==settings.chrom){
 	res.push_back(std::make_pair (start,end));
       }
@@ -1609,7 +1621,7 @@ int parse_bam(int argc, char * argv[]) {
     
     if(bed_coord.size()==0){
       std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
-      exit(EXIT_FAILURE);      
+      exit(EXIT_SUCCESS);      
     }
 
   }
@@ -1713,6 +1725,22 @@ int parse_bam(int argc, char * argv[]) {
   const std::vector<int> cpg_bool = get_cpg_bool(ref, seq_len);
   std::cerr << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
   settings.args_stream << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
+  
+  // do not included CnonCpGs if deamrates are already provided.
+  std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
+  for (size_t i=0; i<rgs.size(); i++){
+    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+      exclude_CnonCpGs[i] = 1;
+      std::cerr << "\t-> No need to include CnonCpGs for " << rgs[i] << " as -D is provided: " << settings.deamrates_filename << '\n';
+      settings.args_stream << "\t-> No need to include CnonCpGs for " << rgs[i] << " as -D is provided: " << settings.deamrates_filename << '\n';
+      
+    } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
+      exclude_CnonCpGs[i] = 1;
+      std::cerr << "\t-> No need to include CnonCpGs for " << rgs[i] << " as " << settings.outbase+"."+rgs[i]+".deamrates" << " exists" << '\n';
+      settings.args_stream << "\t-> No need to include CnonCpGs for " << rgs[i] << " as " << settings.outbase+"."+rgs[i]+".deamrates" << " exists" << '\n';
+    }
+  }
+
 
   std::vector<per_site> data;
   data.resize(cpg_map.size());
@@ -1798,7 +1826,7 @@ int parse_bam(int argc, char * argv[]) {
    }
 
    d = align_read(rd, ref);
-   add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx]);
+   add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
   }
   time(&end_time_load_data);
 
@@ -1810,8 +1838,8 @@ int parse_bam(int argc, char * argv[]) {
     trashed << ". Reads skipped (nocpg overlap): " << reads_skipped << 
     ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
   for (size_t i=0; i<rgs.size(); i++){
-    std::cerr << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnoCpG: " << cov_rg.nocpg[i] << '\n';
-    settings.args_stream << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnoCpG: " << cov_rg.nocpg[i] << '\n';
+    std::cerr << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
+    settings.args_stream << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
   }
   for (size_t i=0; i<rgs.size(); i++){
     std::cerr << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
@@ -1824,6 +1852,8 @@ int parse_bam(int argc, char * argv[]) {
 
   std::vector<std::vector<double>> param_deam;
   param_deam.resize(rgs.size());
+
+  settings.args_stream << std::flush;
 
   for (size_t i=0; i<rgs.size(); i++){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
@@ -1959,6 +1989,7 @@ int parse_bam(int argc, char * argv[]) {
     run_mle_bed(settings, mle_data, bed_coord);
   }
   std::cerr << "\t-> Cleaning up." << '\n';
+  settings.args_stream << std::flush;
   mle_data.clear();
   free(ref);
   hts_itr_destroy(iter);
@@ -1970,8 +2001,8 @@ int parse_bam(int argc, char * argv[]) {
   double time_gone = difftime(end_time, start_time);
   size_t minutes = time_gone / 60.0;
   size_t seconds = (int)time_gone % 60;
-  std::cerr << "\t-> Done in " << minutes << ":" << seconds << " M:S." << '\n';
-  settings.args_stream << "\t-> Done in " << minutes << ":" << seconds << " M:S." << '\n';
+  std::cerr << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
+  settings.args_stream << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
   return 0;
 }
 

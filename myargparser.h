@@ -9,15 +9,16 @@ struct general_settings{
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;
-  size_t cycles, minreadlength;
+  size_t cycles, minreadlength, minreadlength_deam;
   size_t windowsize, max_cpgs;
   general_settings(){
     minmapQ = 25;
-    max_pos_to_end = 125;
+    max_pos_to_end = 30;
     minbaseQ = 20;
     minreadlength=25;
+    minreadlength_deam=std::numeric_limits<size_t>::max();
     flags_off = 3844; // https://broadinstitute.github.io/picard/explain-flags.html
-    M = 0.75; // ~80% of all CpG are methylated in humans
+    M = 0.75; // ~70-80% of all CpG are methylated in mammals
     cycles=std::numeric_limits<size_t>::max();
     windowsize=std::numeric_limits<size_t>::max();
     max_cpgs=std::numeric_limits<size_t>::max();
