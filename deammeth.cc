@@ -3,6 +3,7 @@
 #include <set>
 #include <ctime>
 
+#include <iomanip> // setprecision
 std::string UNKNOWN_RG("UNKNOWN");
 std::string ALL_RG("ALL_DEAMMETH");
 size_t ALL_DEAMMETH_RG_IDX = 0;
@@ -1121,6 +1122,20 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
   return log_like_window;
 }
 
+double loglikelihood_after_mle(const std::vector<double> &x, pre_calc_per_site * site){
+  double log_like_cgcg_geno=0;
+  double read_like ;
+  double noM, M, mape ;
+  for (size_t i=0; i < site->depth; i++){
+    noM =  site->pre_noM[i];
+    M = site->pre_M[i];
+    mape = site->maperrors[i];
+    read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*DINUCL_FLAT_PRIOR;
+    log_like_cgcg_geno += std::log(read_like);
+  }
+  return log_like_cgcg_geno + LOG_PRIORS[0];
+}
+
 double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_site> & data, per_mle_run &mle_data){
   double total_d2=0;
   // double nominator, denominator;
@@ -1283,11 +1298,11 @@ void run_mle(general_settings & settings,
 
     double minf;
     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-    std::vector<double> param (1, 0.5);
+    std::vector<double> param (1, SMALLTOLERANCE);
     nlopt::result result;
     double second_der, error;
     size_t iterations;
-      
+    
     if(! same){
       if(do_haploid_model){ 
 	opt.set_max_objective(objective_func_F_haploid, &void_stuff);
@@ -1329,6 +1344,23 @@ void run_mle(general_settings & settings,
     // iterations=void_stuff.iteration;
     // // to this
     
+
+    // // temp
+    // std::vector<double> dummy;
+    // for (double i=0; i<=1; i+=0.01){
+    //   std::vector<double> x(i);
+    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
+    // }
+    // // temp end
+
+    // // probability of dinucleotide genotypes for the site in the center.
+    // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &pre_calc_data[curr_idx]));
+    // double sum_exp = first_dinucl_genotype;
+    // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
+    //   sum_exp += std::exp(val);
+    // }
+    // end
+
     f << "contig: " << settings.chrom
       << " Center_pos: " << mle_data.curr_pos
       << " N_CpGs: " << mle_data.n_cpgs
@@ -1343,6 +1375,14 @@ void run_mle(general_settings & settings,
       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
 	f << ","<< *i;
       }
+
+      // // printing probability of dinucleotide genotypes for the site in the center.
+      // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ; 
+      // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
+      // 	f << ","<< std::exp(val)/sum_exp ;
+      // }
+      // end
+
       f << '\n';
 
     // // // checking that the derivative is correct
@@ -1413,11 +1453,21 @@ void run_mle_bed(general_settings & settings,
 
     double minf;
     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-    std::vector<double> param (1, 0.5);
+    // std::vector<double> param (1, 0.5);
+    std::vector<double> param (1, SMALLTOLERANCE);
     nlopt::result result;
     double second_der, error;
     size_t iterations;
       
+    // // temp
+    // std::vector<double> dummy;
+    // for (double i=0; i<=1; i+=0.01){
+    //   std::vector<double> x(i);
+    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
+    // }
+    // loglikelihood_after_mle(param[0], 
+    // // temp end
+
     if(do_haploid_model){ 
       opt.set_max_objective(objective_func_F_haploid, &void_stuff);
       result = opt.optimize(param, minf);
@@ -1582,6 +1632,17 @@ void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, s
     }
   }
   f.close();
+}
+
+void print_d(pre_calc_per_site & d){
+  std::cout << d.depth << " " << d.position <<  '\n';
+  for (const auto & val : d.remaining_dinucl_genotypes){
+    std::cout << val <<  '\n';
+  }
+  for (int i=0; i<d.depth;i++){
+    std::cout << i << " " << d.maperrors[i] << " " << d.pre_noM[i] << " " << d.pre_M[i] << '\n';
+  }
+  std::cout << std::flush;
 }
 
 int parse_bam(int argc, char * argv[]) {
@@ -1976,6 +2037,9 @@ int parse_bam(int argc, char * argv[]) {
       d.remaining_dinucl_genotypes.push_back(res + LOG_PRIORS[idx_prior]);      
     }
     mle_data.push_back(d);
+    // if(d.position==112256){
+    //   print_d(d);
+    // }
   }
   data.clear();
   if(settings.bed_f.empty()){

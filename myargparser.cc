@@ -123,13 +123,13 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
                  "fasta)\n\t->-c (chromosome of interest)" << '\n';
     std::cerr << "OPTIONS:" << std::endl;
-      std::cerr << "\t-> BED file (-B): " << std::endl;
-      std::cerr << "\t-> minmapQ (-q): " << std::endl;
-      std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
-      std::cerr << "\t-> MinReadLength (-L): " << std::endl;
-      std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
-      std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
-      std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
+    std::cerr << "\t-> BED file (-B): " << std::endl;
+    std::cerr << "\t-> minmapQ (-q): " << std::endl;
+    std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
+    std::cerr << "\t-> MinReadLength (-L): " << std::endl;
+    std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+    std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
+    std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
     std::cerr << "\t-> Outbase (-O): " << std::endl;
     std::cerr << "\t-> readFlags (-F): " << std::endl;
     std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
