@@ -1,4 +1,3 @@
-DINGDONG
 
 git clone https://github.com/samtools/htslib.git
 
