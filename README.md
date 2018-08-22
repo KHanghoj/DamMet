@@ -51,9 +51,9 @@ All avaliable options with a description can displayed by running deammeth witho
 
 #### Input formats ####
 
-    1. *-R* allows the user to provide a list of read groups (ID) that should be considered individually for estimating deamination rates. Readgroups not present in the input file will be ignored and their sequencing data is not considered for any analyses. The input file should contain a single read group name (ID) per line. If the end-user does not provide a file to *-R* all, all sequencing data with be merged into a single read group. The latter is the default in deammeth.
-    2. *-E* allows the user to provide genomic sites that should be excluded. The file show contain a site per line (e.g. chr20 100001). The genomic position should be 1-based.
-    3. *-e* allows the user to provide genomic regions that should be excluded. The file should take the form of a standard BED file.
+1. *-R* allows the user to provide a list of read groups (ID) that should be considered individually for estimating deamination rates. Readgroups not present in the input file will be ignored and their sequencing data is not considered for any analyses. The input file should contain a single read group name (ID) per line. If the end-user does not provide a file to *-R* all, all sequencing data with be merged into a single read group. The latter is the default in deammeth.
+2. *-E* allows the user to provide genomic sites that should be excluded. The file show contain a site per line (e.g. chr20 100001). The genomic position should be 1-based.
+3. *-e* allows the user to provide genomic regions that should be excluded. The file should take the form of a standard BED file.
 
 ## Simulating sequence data with methylation specific deamination patterns using [gargammel](https://github.com/grenaud/gargammel). ##
 
