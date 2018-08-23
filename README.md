@@ -57,7 +57,7 @@ All avaliable options with a description can displayed by running deammeth witho
 
 ## Simulating sequence data with methylation specific deamination patterns using [gargammel](https://github.com/grenaud/gargammel). ##
 
-Along with the publication of deammeth, we also developed a new feature to [gargammel]()(https://github.com/grenaud/gargammel) that enables the end-user to simulate ancient DNA sequences with methylation specific deamination patterns. With this new feature, it has become possible to answer questions like, what is the accuracy with the current sequecing effort, what is my false discovery rate, what is the optimal trade off between genomic resolution (e.g. genomic window) and sequencing effort. 
+Along with the publication of deammeth, we also developed a new feature to [gargammel](https://github.com/grenaud/gargammel) that enables the end-user to simulate ancient DNA sequences with methylation specific deamination patterns. With this new feature, it has become possible to answer questions like, what is the accuracy with the current sequecing effort, what is my false discovery rate, what is the optimal trade off between genomic resolution (e.g. genomic window) and sequencing effort. 
 
 ## Citation ##
 
