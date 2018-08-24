@@ -1,3 +1,4 @@
+
 #include "deammeth.h"
 #include "nlopt.hpp"
 #include <set>
@@ -456,7 +457,7 @@ void add_aligned_data(general_settings &settings,
       }
 
       // check if left side is an indel
-      if(b1-1 >=0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
+      if(b1>0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
       	continue;
       }
       
@@ -515,7 +516,7 @@ void add_aligned_data(general_settings &settings,
       }
 
       // check if left side has an indel
-      if(b1-1 >=0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
+      if(b1>0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
       	continue;
       }
       
@@ -888,11 +889,8 @@ void run_deamrates_optim(general_settings & settings, const tally_mat_freq & tmf
 }
 
 
-std::vector<size_t> load_pos_per_chrom(std::string & filename, const std::string & selected_chrom){
-  // 1-based coordinates
-  std::vector<size_t> res;
-  res.reserve(100000);
-  std::ifstream f (filename.c_str());
+void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref){
+   std::ifstream f (filename.c_str());
   checkfilehandle(f, filename);
   if(f.is_open()){
     std::string row, chrom;
@@ -903,25 +901,22 @@ std::vector<size_t> load_pos_per_chrom(std::string & filename, const std::string
       ss >> chrom >> pos;
       if(chrom == selected_chrom){
         // -1 as it has to zero-based :)
-        res.push_back(pos-1);
+        if(pos>0){
+          ref[pos-1] = 'N';
+        } else {
+          std::cerr << "Something is not correct in sites file: " << filename
+                    << " at region: " << chrom << " " << pos 
+                    << " EXITING!!!!! " << std::endl;
+          exit(EXIT_FAILURE);
+
+        }
       }
-      ss.clear();
     }
   }
-  f.close();
-  return res;
-}
-
-void filter_ref_db_old(const std::string & chrom, std::string & filename, char * ref){
-  std::vector<size_t> pos = load_pos_per_chrom(filename, chrom);
-  for (const auto & val : pos){
-    // std::cout << val << " " << ref[val] << '\n';
-    ref[val] = 'N';
-  }
 }
 
 
-void filter_ref_BED(const std::string & selected_chrom, std::string & filename, char * ref){
+void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref){
   std::ifstream f (filename.c_str());
   checkfilehandle(f, filename);
   if(f.is_open()){
@@ -931,9 +926,15 @@ void filter_ref_BED(const std::string & selected_chrom, std::string & filename, 
     while(getline(f, row)){
       ss.str(row);
       ss >> chrom >> start >> end;
-      if(chrom == selected_chrom){
-	for(size_t val=start; val<end; val++){
-	  ref[val] = 'N';
+      if (chrom == selected_chrom) {
+        if (start >= end) {
+          std::cerr << "Something is not correct in BED file: " << filename
+                    << " at region: " << chrom << " " << start << " " << end
+                    << " EXITING!!!!! " << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        for (size_t val = start; val < end; val++) {
+          ref[val] = 'N';
 	}
       }
       ss.clear();
@@ -1621,7 +1622,7 @@ void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, s
       ss.str(row);
       
       ss >> chrom >> start >> end;
-      if(start>=end || start<0){
+      if(start>=end){
 	std::cerr << "BED: "<< settings.bed_f << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
 	exit(EXIT_FAILURE); 
       }
@@ -1765,13 +1766,19 @@ int parse_bam(int argc, char * argv[]) {
 
   size_t seq_len = faidx_seq_len(fai, settings.chrom.c_str());
 
-  // with true, it works like a charm
-  if (!settings.exclude_sites_fn.empty()) {
-    std::cerr << "\t-> Loading file to mask genomic sites sites (-E). Still using the old format. the code is available for using a BED format. just change filter_ref_db_old to filter_ref_db_BED" << '\n';
-    settings.args_stream << "\t-> Loading file to mask genomic sites sites (-E) " << '\n';
-    filter_ref_db_old(settings.chrom, settings.exclude_sites_fn, ref);
+  if (!settings.exclude_bed_fn.empty()) {
+    std::cerr << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
+    settings.args_stream << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';    
+    filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
   }
 
+  // with true, it works like a charm
+  if (!settings.exclude_sites_fn.empty()) {
+    std::cerr << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
+    settings.args_stream << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
+    filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
+  }
+  
   std::vector<tally_mat_freq> tmf;
   tmf.resize(rgs.size());
   std::vector<tally_mat> tm;

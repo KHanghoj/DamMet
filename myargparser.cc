@@ -8,7 +8,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
-  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:C:P:D:h:O:M:W:N:L:R:B:l:")) != -1) {
+  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:e:C:P:D:h:O:M:W:N:L:R:B:l:")) != -1) {
     switch (c) {
     case 'b':
       if (optarg)
@@ -44,6 +44,10 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     case 'E':
       if (optarg)
         settings.exclude_sites_fn = std::string(optarg);
+      break;
+    case 'e':
+      if (optarg)
+        settings.exclude_bed_fn = std::string(optarg);
       break;
     case 'C':
       if (optarg)
@@ -135,7 +139,8 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
     std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
     std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
-    std::cerr << "\t-> Exclude sites (-E): " << std::endl;
+    std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
+    std::cerr << "\t-> Exclude BED (-e): " << std::endl;
     std::cerr << "\t-> WindowSize (-W): " << std::endl;
     std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
     exit(EXIT_SUCCESS);
@@ -186,7 +191,8 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " + std::to_string(settings.cycles) + '\n';
   ss += "\t-> Using Precalc deamination rates from (-D): " + settings.deamrates_filename + '\n';
   ss += "\t-> Using readgroups from file (-R): " + settings.readgroups_f + '\n';
-  ss += "\t-> Exclude sites (-E): " + settings.exclude_sites_fn + '\n';
+  ss += "\t-> Exclude sites (1-based) (-E): " + settings.exclude_sites_fn + '\n';
+  ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
   ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
   ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
   

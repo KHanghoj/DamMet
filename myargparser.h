@@ -4,7 +4,7 @@
 struct general_settings{
   std::ofstream args_stream;
   std::string bam_fn, reference_fn, chrom;
-  std::string exclude_sites_fn, all_options, outbase, deamrates_filename;
+  std::string exclude_sites_fn, exclude_bed_fn, all_options, outbase, deamrates_filename;
   std::string readgroups_f, bed_f, priors_str;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
