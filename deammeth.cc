@@ -1,4 +1,3 @@
-
 #include "deammeth.h"
 #include "nlopt.hpp"
 #include <set>
@@ -900,7 +899,7 @@ void filter_ref_sites(const std::string & selected_chrom, std::string & filename
       ss.str(row);
       ss >> chrom >> pos;
       if(chrom == selected_chrom){
-        // -1 as it has to zero-based :)
+        // -1 as it has to be zero-based :)
         if(pos>0){
           ref[pos-1] = 'N';
         } else {
@@ -908,9 +907,9 @@ void filter_ref_sites(const std::string & selected_chrom, std::string & filename
                     << " at region: " << chrom << " " << pos 
                     << " EXITING!!!!! " << std::endl;
           exit(EXIT_FAILURE);
-
         }
       }
+      ss.clear();
     }
   }
 }
@@ -1772,7 +1771,6 @@ int parse_bam(int argc, char * argv[]) {
     filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
   }
 
-  // with true, it works like a charm
   if (!settings.exclude_sites_fn.empty()) {
     std::cerr << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
     settings.args_stream << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
