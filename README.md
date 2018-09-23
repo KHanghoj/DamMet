@@ -42,26 +42,37 @@ DamMet takes three required arguments, a bam file (-b), a reference genome (-r),
   bash run.sh
 ```
 
-This example also shows the several of the available options. The main script in this example ('run.sh') can easily be modified for analyses of any sample of interest.
+The output plot (*result.pdf*) of this running example should be identical to *result.expected.pdf*. The main script in this example ('run.sh') can easily be used as a template to suit any analyses of interest.
 
+### Options, Input and Output formats ###
 
-### Options and input formats ###
+All available options followed by a description can displayed by running DamMet without any arguments (`./DamMet/DamMet`). 
 
-All avaliable options with a description can displayed by running DamMet without any arguments (`./DamMet/DamMet`). 
+#### Special Input formats ####
 
-#### Input formats ####
-
-1. *-R* allows the user to provide a list of read groups (ID) that should be considered individually for estimating deamination rates. Readgroups not present in the input file will be ignored and their sequencing data is not considered for any analyses. The input file should contain a single read group name (ID) per line. If the end-user does not provide a file to *-R* all, all sequencing data with be merged into a single read group. The latter is the default in DamMet.
+1. *-R* allows the user to provide a list of read groups (ID) that should be considered individually for estimating deamination rates. Readgroups not present in the input file will be ignored and their sequencing data is not considered for any analyses. The input file should contain a single read group name (ID) per line. If the user does not provide a file to *-R* all, all sequencing data with be merged into a single read group. The latter is the default in DamMet.
 2. *-E* allows the user to provide genomic sites that should be excluded. The file show contain a site per line (e.g. chr20 100001). The genomic position should be 1-based.
 3. *-e* allows the user to provide genomic regions that should be excluded. The file should take the form of a standard BED file.
 
+#### Output format ####
+
+Two types of files are produced by DamMet, namely a *CHR.READGROUP.deamrates* file and a *CHR.READGROUP.[BED].F* file.
+
+##### *CHR.READGROUP.deamrates* #####
+This file contains the MLE of the deamination rates. 
+1. Methylation status (Methylated == 0; UnMethylated == 1)
+2. DNA position along a DNA molecule (0-based)
+3. Prime (5-prime == 0; 3-prime == 1)
+4. Deamination rate
+
+##### *CHR.READGROUP.BED.F* or *CHR.READGROUP.F* #####
+Every row is a BED region or a genomic CpG. Every output column follows a description.
+
+
 ## Simulating sequence data with methylation specific deamination patterns using [gargammel](https://github.com/grenaud/gargammel). ##
 
-Along with the publication of DamMet, we also developed a new feature to [gargammel](https://github.com/grenaud/gargammel) that enables the end-user to simulate ancient DNA sequences with methylation specific deamination patterns. With this new feature, it has become possible to answer questions like, what is the accuracy with the current sequecing effort, what is my false discovery rate, what is the optimal trade off between genomic resolution (e.g. genomic window) and sequencing effort. 
+Along with the publication of DamMet, we also developed a new feature to [gargammel](https://github.com/grenaud/gargammel) that enables the user to simulate ancient DNA sequences with methylation specific deamination patterns. With this new feature, it has become possible to answer questions like, what is the accuracy with the current sequencing effort and what is the optimal trade off between genomic resolution (e.g. genomic window) and sequencing effort. 
 
 ## Citation ##
 
-WILL COME.
-
-
-
+Submitted
