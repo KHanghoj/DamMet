@@ -9,6 +9,7 @@ struct general_settings{
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;
+  bool merged_all_bed;
   size_t cycles, minreadlength, minreadlength_deam;
   size_t windowsize, max_cpgs;
   general_settings(){
@@ -22,6 +23,7 @@ struct general_settings{
     cycles=std::numeric_limits<size_t>::max();
     windowsize=std::numeric_limits<size_t>::max();
     max_cpgs=std::numeric_limits<size_t>::max();
+    merged_all_bed=false;
   }
 };
 

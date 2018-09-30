@@ -1499,6 +1499,89 @@ void run_mle_bed(general_settings & settings,
   f.close();
 }
 
+void run_mle_merged_bed(general_settings & settings,
+		 std::vector<pre_calc_per_site> & pre_calc_data,
+		 std::vector<std::pair<size_t, size_t>> & bed_coord) {
+  std::string filename = settings.outbase + ".BED.MERGED.F";
+  std::ofstream f (filename.c_str());
+  checkfilehandle(f, filename);
+  nlopt::opt opt(nlopt::LD_MMA, 1);
+  std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+  opt.set_maxeval(1000);
+  opt.set_lower_bounds(lb);
+  opt.set_upper_bounds(up);
+  opt.set_xtol_abs(0);
+  opt.set_ftol_abs(1e-15);
+  opt.set_xtol_rel(0);
+  opt.set_ftol_rel(0);
+  std::vector<size_t> sites_to_include;
+  for (const auto & bed : bed_coord){
+    for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
+      
+      if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
+	sites_to_include.push_back(curr_idx);
+      }
+      if(pre_calc_data[curr_idx].position >= bed.second){
+	break;
+      }
+      
+    }
+  }
+  if( sites_to_include.size()==0){
+    f << settings.chrom << ":" << "NOCPG" << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
+    return;
+  }
+  
+  // it is stupid to run over data again, but too tired to make new structs for the BED setup.
+    // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
+  per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
+  for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
+    update_mle_data(mle_data, pre_calc_data[*it], *it); 
+  }
+  
+  if(mle_data.total_depth == 0){
+    f << settings.chrom << ":" << "NODATA" << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
+    return;
+  }
+  
+  double minf;
+  F_void void_stuff(&settings, &pre_calc_data, &mle_data);
+  // std::vector<double> param (1, 0.5);
+  std::vector<double> param (1, SMALLTOLERANCE);
+  nlopt::result result;
+  double second_der, error;
+  size_t iterations;
+  if(do_haploid_model){ 
+    opt.set_max_objective(objective_func_F_haploid, &void_stuff);
+    result = opt.optimize(param, minf);
+    second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
+  } else {
+    opt.set_max_objective(objective_func_F, &void_stuff);
+    result = opt.optimize(param, minf);
+    second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
+  }
+  error = 1.96/std::sqrt(-second_der);
+  iterations=void_stuff.iteration;
+  
+  f << settings.chrom << ":" << "MERGEDREGIONS"
+    << " N_CpGs: " << mle_data.n_cpgs
+    << " Depth: " << mle_data.total_depth
+    << " Distance: " << mle_data.max_pos - mle_data.min_pos
+    << " ll: " << minf
+    << " f: " << param[0]
+    << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
+    << " iterations: " << iterations
+    << " optim_return_code: " << result
+    << " Incl_pos: " << mle_data.positions[0];
+  for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
+    f << ","<< *i;
+  }
+  f << std::endl;
+  f.close();  
+}
+
+
+
 double base_condition_one_genotype(const size_t &strand, const double &deam,
                                    const double &seqerror, const size_t &base,
                                    const size_t &geno) {
@@ -2052,6 +2135,10 @@ int parse_bam(int argc, char * argv[]) {
     settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
     run_mle(settings, mle_data);
 
+  } else if ((!settings.bed_f.empty() && settings.merged_all_bed)) {
+    std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.MERGED.F" << '\n';
+    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.MERGED.F" << '\n';
+    run_mle_merged_bed(settings, mle_data, bed_coord);
   } else {
     std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
     settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';

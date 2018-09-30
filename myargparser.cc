@@ -8,7 +8,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
-  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:e:C:P:D:h:O:M:W:N:L:R:B:l:")) != -1) {
+  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:e:C:P:D:h:O:M:W:N:L:R:B:l:Y")) != -1) {
     switch (c) {
     case 'b':
       if (optarg)
@@ -115,6 +115,12 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         settings.bed_f = std::string(optarg);
       }
       break;
+    case 'Y':
+      if (optarg){
+        // if true, all BED regions are merged into a single estimate. 
+        settings.merged_all_bed = true;
+      }
+      break;
     case '?':
       std::cerr << "FUCKED BIGTIME" << '\n';
       exit(EXIT_FAILURE);
@@ -143,6 +149,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     std::cerr << "\t-> Exclude BED (-e): " << std::endl;
     std::cerr << "\t-> WindowSize (-W): " << std::endl;
     std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+    std::cerr << "\t-> MLE estimate of a merger of all BED regions (-Y): " << std::endl;    
     exit(EXIT_SUCCESS);
   }
 
@@ -195,6 +202,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
   ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
   ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
+  ss += "\t-> MLE estimate of a merger of all BED regions (-Y) " + std::to_string(settings.merged_all_bed) + '\n';
   
   settings.all_options = ss;
   std::cerr << '\n' << ss;
