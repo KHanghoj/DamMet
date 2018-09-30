@@ -66,7 +66,7 @@ This file contains the MLE of the deamination rates.
 4. Deamination rate
 
 ##### *CHR.READGROUP.BED.F* or *CHR.READGROUP.F* #####
-Every row is a BED region or a genomic CpG. Every output column follows a description.
+Every row is a BED region or a genomic CpG. Every column output comes with a description.
 
 
 ## Simulating sequence data with methylation specific deamination patterns using [gargammel](https://github.com/grenaud/gargammel). ##
