@@ -5,24 +5,12 @@
 DamMet is probabilistic model for mapping ancient methylomes using sequencing data underlying an ancient specimen.
 The model is implemented as a two step procedure. The first step recovers a maximum likelihood estimate (MLE) of the position specific deamination rates for methylated and unmethylated cytosine residues. The second step, making use of these deamination rates, returns a MLE of the methylation level in a user-defined genomic window. The two step procedure as implemented in DamMet is fully 
 
-## Requirements ##
-
-DamMet requires [NLopt](https://nlopt.readthedocs.io/en/latest/) to be installed.
-
-``` bash
-    apt-get install nlopt-devel
-```
-
-Additionally, it makes use of [htslib](https://github.com/samtools/htslib.git) to parse genome references and BAM files. htslib requires [zlib](https://zlib.net/) to be installed.
-
 ## Installation ##
+DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet. Additionally, [zlib](https://zlib.net/) and [cmake](https://cmake.org/download) should be globally installed.
 
 ``` bash
   git clone https://gitlab.com/KHanghoj/DamMet.git
-  cd DamMet
-  git clone https://github.com/samtools/htslib.git; cd htslib ; make -j2 ; cd ..
-  make
-  cd ..
+  cd DamMet && make && cd ..
 ```
 
 ## How to run DamMet ##
@@ -35,10 +23,7 @@ DamMet takes three required arguments, a bam file (-b), a reference genome (-r),
   git clone https://gitlab.com/KHanghoj/DamMet-tutorial.git
   cd DamMet-tutorial
   git clone https://gitlab.com/KHanghoj/DamMet.git
-  cd DamMet/
-  git clone https://github.com/samtools/htslib.git; cd htslib ; make -j2 ; cd ..
-  make
-  cd ..
+  cd DamMet && make && cd ..
   bash run.sh
 ```
 
