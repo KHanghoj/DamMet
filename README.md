@@ -6,12 +6,13 @@ DamMet is probabilistic model for mapping ancient methylomes using sequencing da
 The model is implemented as a two step procedure. The first step recovers a maximum likelihood estimate (MLE) of the position specific deamination rates for methylated and unmethylated cytosine residues. The second step, making use of these deamination rates, returns a MLE of the methylation level in a user-defined genomic window. The two step procedure as implemented in DamMet is fully 
 
 ## Installation ##
-DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet. Additionally, [zlib](https://zlib.net/) and [cmake](https://cmake.org/download) should be globally installed.
+DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet.
 
 ``` bash
   git clone https://gitlab.com/KHanghoj/DamMet.git
   cd DamMet && make && cd ..
 ```
+[zlib](https://zlib.net/) and [cmake](https://cmake.org/download) should be globally installed.
 
 ## How to run DamMet ##
 
