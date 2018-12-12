@@ -116,7 +116,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       }
       break;
     case '?':
-      std::cerr << "FUCKED BIGTIME" << '\n';
+      std::cerr << "Unknown argument" << '\n';
       exit(EXIT_FAILURE);
       break;
     }
