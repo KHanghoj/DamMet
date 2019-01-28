@@ -57,8 +57,14 @@ Every row is a BED region or a genomic CpG. Every column output comes with a des
 
 ## Simulating sequence data with methylation specific deamination patterns using [gargammel](https://github.com/grenaud/gargammel). ##
 
+
 Along with the publication of DamMet, we also developed a new feature to [gargammel](https://github.com/grenaud/gargammel) that enables the user to simulate ancient DNA sequences with methylation specific deamination patterns. With this new feature, it has become possible to answer questions like, what is the accuracy with the current sequencing effort and what is the optimal trade off between genomic resolution (e.g. genomic window) and sequencing effort. 
 
 ## Citation ##
 
 Submitted
+
+# Troubleshooting #
+## htslib installation ##
+For one user installing the following software fixed some issues installing htslib:
+`libbz2-1.0 libbz2-dev libbz2-ocaml libbz2-ocaml-dev liblzma-dev`.
