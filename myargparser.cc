@@ -129,7 +129,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
                  "The implemented model is a two step procedure. The first step obtains a MLE of position-specific"
                  " deamination rates at both methylated"
                  " and unmethylated cytosine residues. The second step makes use of these estimates to"
-                 " recover a MLE of methylation levels in a user-defined window." << std::endl; 
+                 " recover a MLE of methylation levels in a user-defined window size." << std::endl; 
     std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
                  "fasta)\n\t->-c (chromosome of interest)" << '\n';
     std::cerr << "OPTIONS:" << std::endl;
