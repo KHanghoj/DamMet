@@ -65,6 +65,6 @@ Along with the publication of DamMet, we also developed a new feature to [gargam
 Submitted
 
 # Troubleshooting #
-## htslib installation ##
+## htslib installation issues ##
 For one user installing the following software fixed some issues installing htslib:
 `libbz2-1.0 libbz2-dev libbz2-ocaml libbz2-ocaml-dev liblzma-dev`.
