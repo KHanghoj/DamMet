@@ -15,7 +15,7 @@ v2.5.0.tar.gz:
 htslib/libhts.a:
 	git clone https://github.com/samtools/htslib.git
 	cd htslib  && make && cd ../
-# cd htslib && autoheader && autoconf && ./configure && make -j2 && cd ../
+## cd htslib && autoheader && autoconf && ./configure && make -j2 && cd ../
 .PHONY: install clean
 
 install: DamMet
