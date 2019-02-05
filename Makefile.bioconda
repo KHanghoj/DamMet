@@ -1,13 +1,12 @@
-
 PREFIX:= abc
 
-DamMet: deammeth.cc myargparser.cc nlopt-2.5.0/install/lib/libnlopt.a
-	g++  -O3  deammeth.cc myargparser.cc nlopt-2.5.0/install/lib/libnlopt.a -std=c++11 -I nlopt-2.5.0/install/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
+DamMet: deammeth.cc myargparser.cc ${PREFIX}/nlopt-2.5.0/install/lib/libnlopt.a
+	g++  -O3  deammeth.cc myargparser.cc ${PREFIX}/nlopt-2.5.0/install/lib/libnlopt.a -std=c++11 -I ${PREFIX}/nlopt-2.5.0/install/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
 
-nlopt-2.5.0/install/lib/libnlopt.a: v2.5.0.tar.gz
+${PREFIX}/nlopt-2.5.0/install/lib/libnlopt.a: ${PREFIX}/v2.5.0.tar.gz
 	cd nlopt-2.5.0/ && mkdir -p build/  && cd build/ && cmake -DCMAKE_INSTALL_PREFIX=${PREFIX}/nlopt-2.5.0/install -DNLOPT_OCTAVE=Off -DNLOPT_MATLAB=Off -DNLOPT_GUILE=Off -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=${PREFIX}/nlopt-2.5.0/install/lib .. && make && make install && cd ../..
 
-v2.5.0.tar.gz:
+${PREFIX}/v2.5.0.tar.gz:
 	wget https://github.com/stevengj/nlopt/archive/v2.5.0.tar.gz
 	tar xf v2.5.0.tar.gz
 
