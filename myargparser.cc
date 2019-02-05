@@ -124,12 +124,11 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
 
   if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
       settings.chrom.empty()) {
-
-    std::cerr << "DamMet is a software to estimate methylation maps using HTS sequencing data underlying ancient samples.\n"
-                 "The implemented model is a two step procedure. The first step obtains a MLE of position-specific"
-                 " deamination rates at both methylated"
-                 " and unmethylated cytosine residues. The second step makes use of these estimates to"
-                 " recover a MLE of methylation levels in a user-defined window size." << std::endl; 
+    std::cerr << "\nDamMet is a software aimed to estimate methylation maps using HTS sequencing "
+                 "data underlying ancient samples. The implemented model follows a two-steps procedure. "
+                 "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
+                 "rates at both methylated and unmethylated cytosine residues. The second step makes use "
+                 "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
     std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
                  "fasta)\n\t->-c (chromosome of interest)" << '\n';
     std::cerr << "OPTIONS:" << std::endl;
