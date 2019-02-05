@@ -1,7 +1,7 @@
 PREFIX:= abc
 
-DamMet: deammeth.cc myargparser.cc ${PREFIX}/nlopt-2.5.0/install/lib/libnlopt.a
-	g++  -O2  deammeth.cc myargparser.cc ${PREFIX}/nlopt-2.5.0/install/lib/libnlopt.a -std=c++11 -I ${PREFIX}/nlopt-2.5.0/install/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
+DamMet: deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a
+	g++  -O2  deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a -std=c++11 -I ${PREFIX}/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
 
 .PHONY: install clean
 
