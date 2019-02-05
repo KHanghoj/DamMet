@@ -1,3 +1,6 @@
+
+PREFIX:= /usr/local/
+
 DamMet: deammeth.cc myargparser.cc nlopt-2.5.0/install/lib/libnlopt.a htslib/libhts.a
 	g++  -O3  deammeth.cc myargparser.cc ./htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a -std=c++11 -I nlopt-2.5.0/install/include  -I./htslib/ -lz -lm -lbz2 -llzma -o DamMet -lpthread
         # g++  -O3  deammeth.cc myargparser.cc ./htslib/libhts.a -std=c++11 -I./htslib/ -lz -lm -lbz2 -llzma -lnlopt_cxx -o DamMet -lpthread
@@ -12,6 +15,12 @@ v2.5.0.tar.gz:
 htslib/libhts.a:
 	git clone https://github.com/samtools/htslib.git
 	cd htslib && make -j2 && cd ../
+
+.PHONY: install clean
+
+install: DamMet
+	mkdir -p ${PREFIX}/bin
+	cp DamMet ${PREFIX}/bin
 
 
 clean:
