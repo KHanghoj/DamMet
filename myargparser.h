@@ -1,6 +1,10 @@
 #include <string>
 #include <limits>
 #include <fstream>
+
+const std::string VERSION = "1.0.1";
+
+
 struct general_settings{
   std::ofstream args_stream;
   std::string bam_fn, reference_fn, chrom;
