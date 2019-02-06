@@ -1,7 +1,7 @@
-PREFIX:= abc
+PREFIX:= a
 
 DamMet: deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a
-	g++  -O2  deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a -std=c++11 -I ${PREFIX}/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
+	$(CXX) -O2  deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a -std=c++11 -I ${PREFIX}/include  -lhts -lz -lm -lbz2 -llzma -o DamMet -lpthread 
 
 .PHONY: install clean
 
