@@ -1,6 +1,6 @@
 PREFIX:= a
 
-DamMet: deammeth.cc myargparser.cc ${PREFIX}/lib/libnlopt.a
+DamMet: deammeth.cc myargparser.cc
 	$(CXX) -O2  deammeth.cc myargparser.cc -std=c++11 -I ${PREFIX}/include -L ${PREFIX}/lib -lhts -lz -lm -lbz2 -llzma -lnlopt -lpthread -o DamMet
 
 .PHONY: install clean
