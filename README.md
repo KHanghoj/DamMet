@@ -65,7 +65,7 @@ Along with the publication of DamMet, we also developed a new feature to [gargam
 
 ## Citation ##
 
-Submitted
+https://academic.oup.com/gigascience/article/8/4/giz025/5475519
 
 # Troubleshooting #
 ## htslib installation issues ##
