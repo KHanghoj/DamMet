@@ -6,7 +6,7 @@
 image: node:latest
 before_script:
   - echo `pwd`
-  - apt-get update -qq && apt-get install -y liblzma-dev libbz2-dev libz-dev git g++ build-essential cmake
+  - apt-get update -qq && apt-get install -y liblzma-dev libbz2-dev libz-dev git g++ build-essential cmake libcurl4-openssl-dev
 
 my_deammeth_test:
   script: 
