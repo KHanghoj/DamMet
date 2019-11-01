@@ -2,9 +2,9 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib> // std::div
-#include <memory>
+#include <memory> // make_unique and uni
 #include <string>
-#include <cmath>
+#include <cmath>  // pow
 #include <iostream>
 #include <fstream>
 #include <sstream> //stringstream
@@ -249,6 +249,11 @@ int main(){
   std::cerr << B1_MULT << '\n';
   std::cerr << B2_MULT << '\n';
   std::cerr << B3_MULT << '\n';
-  return 1;
+
+
+  // vector of pointer to structs vs vector of structs
+
+
+  return 0;
 
 }
