@@ -62,11 +62,23 @@ void my_divmod(const int & a, const int &b, int & res, int &rem){
   rem = a%b;
 }
 
+int my_divmod(const int & a, const int &b, int & res){
+  res = a/b;
+  return(a%b);
+}
+
+
 void idx_to_params_kh2(const int & idx, std::vector<int> & res){
   int rem, rem1;
   my_divmod(idx, READPOS_MULT, res[0], rem);
   my_divmod(rem, PRIME_MULT, res[1], rem1);
   my_divmod(rem1, STRAND_MULT, res[2], res[3]);
+}
+void idx_to_params_kh3(const int & idx, std::vector<int> & res){
+  int rem, rem1;
+  rem = my_divmod(idx, READPOS_MULT, res[0]);
+  rem = my_divmod(rem, PRIME_MULT, res[1]);
+  res[3] = my_divmod(rem, STRAND_MULT, res[2]);
 }
 
 std::vector<int> idx_to_params_kh(const int & idx){
@@ -114,6 +126,7 @@ int main ()
   auto abc = timer(idx_to_params,       "     no inline", idx);
   auto abcd = timer(idx_to_params_kh,       "     kh", idx);
   timer2(idx_to_params_kh2,       "     kh2", idx, res2);
+  timer2(idx_to_params_kh3,       "     kh3", idx, res2);
   std::vector<int> res3 = idx_to_params_kh(idx);
   for (int & x1 : res3){
     std::cerr << x1 << "\n";
@@ -125,7 +138,7 @@ int main ()
     std::cerr << x1 << "\n";
   }
 
-  idx_to_params_kh2(idx-1, res2);
+  idx_to_params_kh3(idx, res2);
   for (int & x1 : res2){
     std::cerr << x1 << "\n";
   }

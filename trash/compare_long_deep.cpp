@@ -251,9 +251,8 @@ int main(){
   std::cerr << B3_MULT << '\n';
 
 
-  // vector of pointer to structs vs vector of structs
-
-
-  return 0;
+  /// vector of pointer to structs vs vector of structs
+  
+  return 1;
 
 }
