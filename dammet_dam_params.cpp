@@ -1,4 +1,4 @@
-#include "dammet_dam_params.h"
+#include "dammet_dam_params.hpp"
 #include "nlopt.hpp"
 #include <set>
 #include <ctime>
