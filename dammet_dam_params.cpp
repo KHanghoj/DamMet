@@ -1,3 +1,5 @@
+#include "version.hpp"
+
 #include "dammet_dam_params.hpp"
 #include "nlopt.hpp"
 #include <set>
@@ -1639,11 +1641,50 @@ void print_d(pre_calc_per_site & d){
   std::cout << std::flush;
 }
 
+void print_help(){
+  std::cerr << "\nDamMet (" << DAMMET_VERSION << ") is a software aimed to estimate methylation maps using HTS sequencing "
+    "data underlying ancient samples. The implemented model follows a two-steps procedure. "
+    "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
+    "rates at both methylated and unmethylated cytosine residues. The second step makes use "
+    "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
+  std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
+    "fasta)\n\t->-c (chromosome of interest)" << '\n';
+  std::cerr << "OPTIONS:" << std::endl;
+  std::cerr << "\t-> BED file (-B): " << std::endl;
+  std::cerr << "\t-> minmapQ (-q): " << std::endl;
+  std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
+  std::cerr << "\t-> MinReadLength (-L): " << std::endl;
+  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+  std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
+  std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
+  std::cerr << "\t-> Outbase (-O): " << std::endl;
+  std::cerr << "\t-> readFlags (-F): " << std::endl;
+  std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
+  std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
+  std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
+  std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
+  std::cerr << "\t-> Exclude BED (-e): " << std::endl;
+  std::cerr << "\t-> WindowSize (-W): " << std::endl;
+  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+  exit(EXIT_SUCCESS);
+}
+
+
 int parse_bam(int argc, char * argv[]) {
   time_t start_time, end_time;
   time(&start_time);
   general_settings settings;
   args_parser(argc, argv, settings);
+  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
+      settings.chrom.empty()) {
+    print_help();
+  }
+  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
+    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+    std::cerr << "EXITING...." << '\n';
+    exit(EXIT_FAILURE);
+  }
+
 
   // update priors if provided
   if(!settings.priors_str.empty()){
@@ -2070,5 +2111,4 @@ int parse_bam(int argc, char * argv[]) {
 
 int main(int argc, char *argv[]) {
   return parse_bam(argc, argv);
-
 }

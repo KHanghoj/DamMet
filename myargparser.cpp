@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <sys/stat.h> // mkdir
 
+
+
 void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
@@ -121,35 +123,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       break;
     }
   }
-
-  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
-      settings.chrom.empty()) {
-    std::cerr << "\nDamMet (" << VERSION << ") is a software aimed to estimate methylation maps using HTS sequencing "
-                 "data underlying ancient samples. The implemented model follows a two-steps procedure. "
-                 "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
-                 "rates at both methylated and unmethylated cytosine residues. The second step makes use "
-                 "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
-    std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
-                 "fasta)\n\t->-c (chromosome of interest)" << '\n';
-    std::cerr << "OPTIONS:" << std::endl;
-    std::cerr << "\t-> BED file (-B): " << std::endl;
-    std::cerr << "\t-> minmapQ (-q): " << std::endl;
-    std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
-    std::cerr << "\t-> MinReadLength (-L): " << std::endl;
-    std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
-    std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
-    std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
-    std::cerr << "\t-> Outbase (-O): " << std::endl;
-    std::cerr << "\t-> readFlags (-F): " << std::endl;
-    std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
-    std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
-    std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
-    std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
-    std::cerr << "\t-> Exclude BED (-e): " << std::endl;
-    std::cerr << "\t-> WindowSize (-W): " << std::endl;
-    std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
-    exit(EXIT_SUCCESS);
-  }
+  
 
   if(settings.M < 0 || settings.M > 1){
     std::cerr << "Fraction of methylated CpGs on the chromosome must be between 0 and 1" << '\n';
@@ -160,12 +134,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     settings.outbase="dammet_res";
     mkdir(settings.outbase.c_str(),0777);
     settings.outbase += "/"+settings.chrom;
-  }
-
-  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
-    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
-    std::cerr << "EXITING...." << '\n';
-    exit(EXIT_FAILURE);
   }
 
   if(settings.minmapQ < 1){
@@ -202,5 +170,5 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
   
   settings.all_options = ss;
-  std::cerr << '\n' << ss;
+  // std::cerr << '\n' << ss;
 }
