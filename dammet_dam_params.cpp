@@ -195,8 +195,6 @@ std::vector<double> read_count_file(general_settings & settings, std::string & r
       for (size_t st = 0; st < STRANDS; st++) {
         for (size_t r1 = 0; r1 < NUCLEOTIDES; r1++) {
           for (size_t r2 = 0; r2 < NUCLEOTIDES; r2++) {
-
-            std::cerr << p << " "  << pr << " "  << st << " "  << r1 << " "  << r2 << '\n';
             size_t totalsum = 0;
             for (size_t s1 = 0; s1 < NUCLEOTIDES; s1++) {
               for (size_t s2 = 0; s2 < NUCLEOTIDES; s2++) {
@@ -1669,22 +1667,276 @@ void print_help(){
   exit(EXIT_SUCCESS);
 }
 
+void est_dam_only(general_settings & settings) {
+  std::string stream_filename (settings.outbase+".args");
+  settings.args_stream.open(stream_filename.c_str());
+  checkfilehandle(settings.args_stream, stream_filename);
+  settings.args_stream << settings.all_options;
 
-int parse_bam(int argc, char * argv[]) {
-  time_t start_time, end_time;
-  time(&start_time);
-  general_settings settings;
-  args_parser(argc, argv, settings);
-  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
-      settings.chrom.empty()) {
-    print_help();
+  std::vector<std::pair<size_t, size_t>> bed_coord;
+  // parsing bedfile if provided
+  if(!settings.bed_f.empty()){
+    parse_bed_file(settings, bed_coord);
+    std::cerr << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
+    settings.args_stream << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
+
+    if(bed_coord.size()==0){
+      std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
+      exit(EXIT_SUCCESS);
+    }
+
   }
-  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
-    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
-    std::cerr << "EXITING...." << '\n';
+
+  // open BAM for reading
+  samFile *in = sam_open(settings.bam_fn.c_str(), "r");
+  if (in == NULL) {
+    std::cerr << "Unable to open BAM/SAM file: " << bam << '\n';
     exit(EXIT_FAILURE);
   }
 
+  // Get the header
+  bam_hdr_t *header = sam_hdr_read(in);
+  if (header == NULL) {
+    sam_close(in);
+    std::cerr << "Unable to open BAM header: " << bam << '\n';
+    exit(EXIT_FAILURE);
+  }
+
+  // Load the index
+  hts_idx_t *idx = sam_index_load(in, settings.bam_fn.c_str());
+
+  if (idx == NULL) {
+    std::cerr
+        << "Unable to open BAM/SAM index. Make sure alignments are indexed."
+        << '\n';
+    exit(EXIT_FAILURE);
+  }
+
+  // load read groups
+  bool rg_split;
+  std::vector<std::string> rgs;
+  std::vector<size_t> cycles;
+  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
+    rg_split = true;
+    std::ifstream f (settings.readgroups_f.c_str());
+    checkfilehandle(f, settings.readgroups_f);
+    std::string row, rg, cycle_string;
+    size_t cycle;
+    std::stringstream ss;
+    while(getline(f, row)){
+      ss.str(row);
+      ss >> rg >> cycle_string;
+      if(cycle_string.empty()){
+        cycle=std::numeric_limits<size_t>::max();
+        std::cerr << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
+        settings.args_stream << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
+      } else {
+        cycle=std::stoi(cycle_string);
+        std::cerr << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
+        settings.args_stream << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
+      }
+      rgs.push_back(rg);
+      cycles.push_back(cycle);
+      ss.clear();
+      rg.clear();
+      cycle_string.clear();
+    }
+    f.close();
+  } else {
+    rg_split = false;
+    rgs.push_back(ALL_RG);
+    if(settings.cycles!=std::numeric_limits<size_t>::max()){
+      cycles.push_back(settings.cycles);
+    } else {
+      cycles.push_back(std::numeric_limits<size_t>::max());
+    }
+    std::cerr << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
+    settings.args_stream << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
+  }
+
+  // go to the correct chromosome
+  // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
+  hts_itr_t *iter = sam_itr_querys(idx, header, settings.chrom.c_str());
+
+  // load ref of that chromosome
+  faidx_t *fai = ref_init(settings.reference_fn);
+
+  char *ref = fetch_chrom(fai, settings.chrom);
+
+  size_t seq_len = faidx_seq_len(fai, settings.chrom.c_str());
+
+  if (!settings.exclude_bed_fn.empty()) {
+    std::cerr << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
+    settings.args_stream << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
+    filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
+  }
+
+  if (!settings.exclude_sites_fn.empty()) {
+    std::cerr << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
+    settings.args_stream << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
+    filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
+  }
+
+  std::vector<std::vector<double>> tmf;
+  tmf.resize(rgs.size());
+  std::vector<std::vector<int>> tm;
+  tm.resize(rgs.size());
+  for (size_t i=0; i<rgs.size(); i++){
+    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
+  }
+
+  my_cov_rg cov_rg(rgs.size());
+
+  const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
+  const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+  std::cerr << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
+  settings.args_stream << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
+
+  // do not included CnonCpGs if deamrates are already provided.
+  std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
+
+  std::vector<per_site> data;
+  data.resize(cpg_map.size());
+  size_t nocpg_to_include = 1e6;
+  per_site_nocpg nocpg_data(nocpg_to_include);
+
+  bam1_t *rd = bam_init1();
+  int reads = 1e6;
+  int counter = 0;
+  alignment_data d;
+  size_t trashed=0, reads_skipped=0;
+  size_t startpos, endpos;
+  bool skipread=true;
+  time_t start_time_load_data,end_time_load_data;
+
+  uint8_t *rgptr;
+  std::string rgname;
+  size_t rgname_idx;
+  std::string rname;
+  time(&start_time_load_data);
+  while (sam_itr_next(in, iter, rd) >= 0) {
+    skipread = true;
+    if (counter % reads == 0 && reads) {
+      std::cerr << "\t-> " << counter << " reads processed and " << trashed << " discarded. " << '\r';
+    }
+    counter++;
+
+    // this is 50% faster than analyzing every single read.
+    startpos = rd->core.pos;
+    endpos = bam_endpos(rd);
+
+    // auto hit = std::find(cpg_bool.begin()+startpos, cpg_bool.begin()+endpos, 1);
+    // if(hit!=cpg_bool.begin()+endpos){
+    //   skipread=false;
+    // }
+    for (size_t i=startpos; i<=endpos; i++){
+      if(cpg_bool[i]==1){
+        skipread=false;
+        break;
+      }
+    }
+
+    if(skipread){
+      reads_skipped++;
+      continue;
+    }
+
+    if (rd->core.l_qseq < settings.minreadlength ||
+        rd->core.qual < settings.minmapQ ||
+        (rd->core.flag & settings.flags_off) != 0 ||
+        rd->core.flag & (BAM_FSECONDARY | BAM_FSUPPLEMENTARY)) {
+      trashed++;
+      continue;
+    }
+
+    // when adding the rd to data, we should also add the RG as a vector. It
+    // could be integers referecing the all the RG found in the header..
+
+    if (rg_split) {
+      rgptr = bam_aux_get(rd, "RG");
+      if (rgptr == NULL) {
+        // in the case norg exists. dont know if i should trash or put in
+        // UNKWOWN
+        rname = std::string(bam_get_qname(rd));
+        std::cerr << "[No_found_RG] :: " << rname << '\n';
+        trashed++;
+        continue;
+      } else {
+        // moves past the Z by +1. all
+        // colons are gone already
+        rgname = std::string((const char *)(rgptr + 1));
+        auto match = std::find(rgs.begin(), rgs.end(), rgname);
+        if (match != rgs.end()) {
+          rgname_idx = distance(rgs.begin(), match);
+        } else { // in the case it cannot find the rg. The read will be trashed
+          trashed++;
+          continue;
+        }
+      }
+   } else {
+     rgname=ALL_RG;
+     rgname_idx=ALL_DEAMMETH_RG_IDX;
+   }
+
+   d = align_read(rd, ref);
+   add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
+  }
+  time(&end_time_load_data);
+
+  std::cerr << "\t-> Processed: " << counter  << ". Reads filtered: " <<
+    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
+    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
+
+  settings.args_stream << "\t-> Processed: " << counter  << ". Reads filtered: " <<
+    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
+    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
+  for (size_t i=0; i<rgs.size(); i++){
+    std::cerr << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
+    settings.args_stream << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
+  }
+  for (size_t i=0; i<rgs.size(); i++){
+    std::cerr << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
+    settings.args_stream << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
+    dump_count_file(settings, tm[i], rgs[i]);
+    tmf[i] = read_count_file(settings, rgs[i]);
+  }
+
+  // mark_no_deam_CT_GA(settings, data);
+
+  std::vector<std::vector<double>> param_deam;
+  param_deam.resize(rgs.size());
+
+  settings.args_stream << std::flush;
+  for (size_t i=0; i<rgs.size(); i++){
+    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+      std::cerr << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
+      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+      settings.args_stream << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
+      param_deam[i] = load_deamrates_f(settings);
+    } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
+      std::cerr << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      settings.args_stream << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      param_deam[i] = load_deamrates(settings, rgs[i]);
+    }else {
+      std::cerr << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
+      settings.args_stream << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
+      run_deamrates_optim(settings, tmf[i], data, nocpg_data, rgs[i], i, cov_rg);
+      std::cerr << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      settings.args_stream << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      param_deam[i] = load_deamrates(settings, rgs[i]);
+    }
+  }
+  std::cerr << "\t-> Cleaning up." << '\n';
+  settings.args_stream << std::flush;
+  free(ref);
+  hts_itr_destroy(iter);
+  hts_idx_destroy(idx);
+  bam_destroy1(rd);
+  bam_hdr_destroy(header);
+  sam_close(in);
+}
+
+int est_dam_and_F(general_settings & settings) {
 
   // update priors if provided
   if(!settings.priors_str.empty()){
@@ -2100,15 +2352,36 @@ int parse_bam(int argc, char * argv[]) {
   bam_destroy1(rd);
   bam_hdr_destroy(header);
   sam_close(in);
+}
+
+
+int main(int argc, char *argv[]) {
+  time_t start_time, end_time;
+  time(&start_time);
+  general_settings settings;
+  args_parser(argc, argv, settings);
+
+  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
+      settings.chrom.empty()) {
+    print_help();
+  }
+  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
+    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+    std::cerr << "EXITING...." << '\n';
+    exit(EXIT_FAILURE);
+  }
+
+
+  // last option should be to get F from est dam only
+  if(0){
+    est_dam_and_F(settings);
+  } else {
+    est_dam_only(settings);
+  }
   time(&end_time);
   double time_gone = difftime(end_time, start_time);
   size_t minutes = time_gone / 60.0;
   size_t seconds = (int)time_gone % 60;
   std::cerr << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
   settings.args_stream << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
-  return 0;
-}
-
-int main(int argc, char *argv[]) {
-  return parse_bam(argc, argv);
 }
