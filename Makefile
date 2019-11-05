@@ -9,9 +9,9 @@ LIBS = -lz -lm -lbz2 -llzma -lpthread -lcurl
 
 
 # htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
-FLAGS = -Ihtslib -Inlopt-2.5.0/install/include -O3 $(LDFLAGS)
+FLAGS = -Ihtslib -Inlopt-2.5.0/install/include -O3 $(LDFLAGS) 
 
-CXXFLAGS := $(FLAGS) $(CXXFLAGS)
+CXXFLAGS := $(FLAGS) $(CXXFLAGS) -std=c++14
 
 PACKAGE_VERSION = 1.0.2a
 
@@ -30,7 +30,7 @@ version.hpp:
 
 # -include $(OBJ:.o=.d)
 
-DamMet: version.hpp $(OBJ) htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
+DamMet: $(OBJ) htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
 	$(CXX) $(FLAGS) -o DamMet $(LIBS) $^
 
 htslib/libhts.a:
