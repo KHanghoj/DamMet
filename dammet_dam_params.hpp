@@ -12,6 +12,7 @@
 #include <utility> // pair
 #include <vector>
 
+#include "zlib.h"
 #include "htslib/faidx.h"
 #include "htslib/hts.h"
 #include "htslib/sam.h"

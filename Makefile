@@ -4,14 +4,10 @@ CXX ?= g++
 
 LIBS = -lz -lm -lbz2 -llzma -lpthread -lcurl
 
-
-
-
-
 # htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
 FLAGS = -Ihtslib -Inlopt-2.5.0/install/include -O3 $(LDFLAGS) 
 
-CXXFLAGS := $(FLAGS) $(CXXFLAGS) -std=c++14
+CXXFLAGS := $(FLAGS) $(CXXFLAGS) -std=c++14 
 
 PACKAGE_VERSION = 1.0.2a
 
@@ -28,10 +24,10 @@ all: $(PROGRAMS)
 version.hpp:
 	echo '#define DAMMET_VERSION "$(PACKAGE_VERSION)"' > $@
 
-# -include $(OBJ:.o=.d)
+-include $(OBJ:.o=.d)
 
 DamMet: $(OBJ) htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
-	$(CXX) $(FLAGS) -o DamMet $(LIBS) $^
+	$(CXX) $^ $(FLAGS) -o DamMet $(LIBS) 
 
 htslib/libhts.a:
 	git clone https://github.com/samtools/htslib.git
