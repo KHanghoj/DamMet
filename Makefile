@@ -26,7 +26,7 @@ all: $(PROGRAMS)
 	$(CXX) -MM $(CXXFLAGS) $*.cpp >$*.d
 
 version.hpp:
-	echo '#define DamMet_VERSION "$(PACKAGE_VERSION)"' > $@
+	echo '#define DAMMET_VERSION "$(PACKAGE_VERSION)"' > $@
 
 # -include $(OBJ:.o=.d)
 
