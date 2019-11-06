@@ -1,8 +1,13 @@
 #include <iostream> // stdout/stdin/stderr
 #include <memory>
 #include <vector>
+#include <chrono>
+#include <thread>
 // bit_fields1.cpp
 // compile with: /LD
+const unsigned long MEGABYTE = 1024 * 1024;
+
+
 using unint = unsigned int;
 
 struct Obs {
@@ -34,7 +39,7 @@ struct Site {
   Site(const unint &_pos,
        const unint &_ref):
     pos(_pos), ref(_ref){
-    data.reserve(20);
+    // data.reserve(20);
   }
   int pos, depth=0;
   unint ref : 3;  // 0-5 A,C,G,T,N,Del
@@ -52,17 +57,51 @@ void print(std::unique_ptr<Obs> & d){
   std::cerr << d->rg << '\n';
 }
 
-int main(){
-  Site d(1000, 1);
-  for (size_t i=0; i<20; i++){
-    d.data.push_back(std::make_unique<Obs>(0, 1, 10, 1, 1, 40, 30, 1));
-    d.depth++;
+void r1(const size_t & nsites, const size_t & nobs ){
+  std::vector<std::unique_ptr<Site>> all;
+  for (size_t pos=0; pos<nsites; pos++){
+    all.push_back(std::make_unique<Site>(pos, 1));
+    for (size_t i=0; i<nobs; i++){
+      // all.back()->data.push_back(std::make_unique<Obs>(0, 1, 10, 1, 1, 40, 30, 1));
+      all.back()->data.push_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
+      all.back()->depth++;
+    }
   }
-  std::cerr << d.depth++ << '\n';
-  for (auto &x: d.data){
-    std::cerr << d.pos << " " << d.ref << " ";
-    print(x);
+  int s = 1000;
+  double mem;
+  std::cerr << all.size() << " " << all[0]->data.size() << '\n';
+  mem = sizeof(std::unique_ptr<Site>) * all.size();
+  mem *= sizeof(std::unique_ptr<Obs>) * all[0]->data.size();
+  mem /= MEGABYTE;
+  std::cerr << all[0]->depth++ << " " << mem << '\n';
+  std::cerr << "sleeping" << '\n';
+  std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+}
 
+void r2(const size_t & nsites, const size_t & nobs ){
+  std::vector<std::unique_ptr<Site>> all;
+  Site d(0,1);
+  for (size_t pos=0; pos<nsites*nobs; pos++){
+    d.data.push_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
   }
+  double mem;
+  int s=1000;
+  std::cerr << d.data.size() << '\n';
+  mem = sizeof(std::unique_ptr<Obs>) * d.data.size();
+  mem /= MEGABYTE;
+  std::cerr << mem << '\n';
+  std::cerr << "sleeping" << '\n';
+  std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+}
+
+int main(int argc, char * argv[]){
+  if (argc != 3){
+    std::cerr << "need 'nsites' and 'nobs' argument only" << '\n';
+    exit(EXIT_FAILURE);
+}
+  size_t nsites = atoi(argv[1]);
+  size_t nobs = atoi(argv[2]);
+  r1(nsites, nobs);
+  r2(nsites, nobs);
 
 }
