@@ -5,6 +5,7 @@
 
 struct general_settings{
   std::ofstream args_stream;
+  std::string buffer;
   std::string bam_fn, reference_fn, chrom;
   std::string exclude_sites_fn, exclude_bed_fn, all_options, outbase, deamrates_filename;
   std::string readgroups_f, bed_f, priors_str;
@@ -24,6 +25,7 @@ struct general_settings{
     cycles=std::numeric_limits<size_t>::max();
     windowsize=std::numeric_limits<size_t>::max();
     max_cpgs=std::numeric_limits<size_t>::max();
+    buffer = ("");
   }
 };
 

@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility> // pair
+#include <memory>
 #include <vector>
 
 #include "zlib.h"
@@ -155,17 +156,6 @@ struct Site {
 // FUNCTIONS
 
 
-std::vector<double> phred_to_double_converter(){
-  std::vector<double> res;
-  for (size_t phred=0; phred<=MAX_PHRED; phred++){
-    res.push_back(phred_to_double(phred));
-  }
-  return res;
-}
-
-std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
-
-
 inline double oplusnatl(const double & x, const double & y );
 
 template <typename T>
@@ -176,9 +166,9 @@ void checkfilehandle(T &fh, std::string filename);
 
 bool check_file_exists(std::string filename);
 
-double phred_to_double(int & phred);
+// double phred_to_double(int & phred);
 
-std::vector<double> phred_to_double_converter();
+// std::vector<double> phred_to_double_converter();
 
 
 //  generate long array with T template

@@ -44,6 +44,17 @@ bool check_file_exists(std::string filename){
 double phred_to_double(size_t & phred){
   return std::pow(10, -((double)phred/10.0));
 }
+std::vector<double> phred_to_double_converter(){
+  std::vector<double> res;
+  for (size_t phred=0; phred<=MAX_PHRED; phred++){
+    res.push_back(phred_to_double(phred));
+  }
+  return res;
+}
+
+std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
+
+
 
 
 const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
@@ -1650,6 +1661,12 @@ void print_help(){
   exit(EXIT_SUCCESS);
 }
 
+void print_log(general_settings & settings){
+  std::cerr << settings.buffer;
+  settings.args_stream << settings.buffer;
+  settings.buffer.clear();
+}
+
 void est_dam_only(general_settings & settings) {
   std::string stream_filename (settings.outbase+".args");
   settings.args_stream.open(stream_filename.c_str());
@@ -1733,8 +1750,15 @@ void est_dam_only(general_settings & settings) {
     } else {
       cycles.push_back(std::numeric_limits<size_t>::max());
     }
-    std::cerr << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
-    settings.args_stream << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
+    // std::string out = "\t-> Merging all reads into a single read group named: ";
+    // out << rgs[0] << " and sequencing cycles: " << cycles[0];
+
+    // print_log(settings,
+    //           out);
+    settings.buffer += "\t-> Merging all reads into a single read group named: " + rgs[0] + " and sequencing cycles: " + std::to_string(cycles[0]) + '\n';
+    print_log(settings);
+
+    // settings.args_stream << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
   }
 
   // go to the correct chromosome
