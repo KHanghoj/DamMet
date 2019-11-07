@@ -6,6 +6,9 @@
 #include <ctime>
 #include <iomanip> // setprecision
 
+using v_un_ch = std::vector<unsigned char>;
+using ptr_obs = std::vector<std::unique_ptr<Obs>>;
+
 // Returns logl( expl(x)+expl(y) )
 inline double oplusnatl(const double & x, const double & y ){
     return x > y
@@ -79,16 +82,39 @@ const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
 //   return res;
 // }
 
-const std::vector<int> get_cpg_chrom_bool(const char * ref, const size_t & seq_len){
-  std::vector<int> res(seq_len, 0);
+// const v_un_ch get_c_and_cpg_chrom(const char * ref, const size_t & seq_len){
+//   v_un_ch res(seq_len, 0);
+//   for (size_t i=0; i<seq_len-1; i++){
+//     if (refToInt[(int)ref[i]] == 1){
+
+//       if (refToInt[(int)ref[i+1]] == 0){
+//         res[i] = 1;
+//         res[i+1] = 1;
+//       } else if (refToInt[(int)ref[i+1]] == 1){
+//         res[i] = 2;
+//         res[i+1] = 2;
+//       } else if (refToInt[(int)ref[i+1]] == 2){
+//         res[i] = 3;
+//         res[i+1] = 3
+//       } else if (refToInt[(int)ref[i+1]] == 3){
+
+//       }
+//     }
+//   }
+//   return res;
+// }
+
+const v_un_ch get_c_and_cpg_chrom(const char * ref, const size_t & seq_len){
+  v_un_ch res(seq_len, 0);
   for (size_t i=0; i<seq_len-1; i++){
-    if (refToInt[(int)ref[i]] == 1 && refToInt[(int)ref[i+1]] == 2){
-      res[i] = 1;
-      res[i+1] = 1;
+    if ((refToInt[(int)ref[i]] == 1)&&(refToInt[(int)ref[i+1]] == 2)){
+      res[i]=1;
+      res[i+1]=1;
     }
   }
   return res;
 }
+
 
 int my_divmod(const int & a, const int &b, int & res){
   res = a/b;
@@ -244,11 +270,11 @@ void get_pos_and_prime(general_settings & settings, const size_t & dist_3p, cons
 }
 
 bool nucleotide_missing(const int & r_base1, const int & r_base2, const int & s_base1, const int & s_base2){
-  return (r_base1==4 || r_base2==4 || s_base1==4 || s_base2==4 || r_base1==9 || r_base2==9 || s_base1==9 || s_base2==9);
+  return (r_base1>=4 || r_base2>=4 || s_base1>=4 || s_base2>=4);
 }
 
 bool base_is_indel(const int & base1, const int & base2){
-  return (base1==9 || base2==9);
+  return (base1==5 || base2==5);
 }
 
 alignment_data align_read(bam1_t * rd, char * ref){
@@ -306,8 +332,8 @@ alignment_data align_read(bam1_t * rd, char * ref){
           d.t_qs.push_back(quals[seq_pos]);
           // qs[ii] = quals[seq_pos];
           // d.t_ref.push_back(4);
-          // 9 reflects an indel
-          d.t_ref.push_back(9);
+          // 5 reflects an indel
+          d.t_ref.push_back(5);
 
           d.t_positions.push_back(0);
 
@@ -317,8 +343,8 @@ alignment_data align_read(bam1_t * rd, char * ref){
       } else { // this is the deletion part
         for(int ii=0;ii<opLen;ii++){
           // d.t_seq.push_back(4);
-          // 9 reflects an indel
-          d.t_seq.push_back(9);
+          // 5 reflects an indel
+          d.t_seq.push_back(5);
           // seq[ii] =  bam_is_rev(rd) ? tolower(c) : toupper(c);
           d.t_posi.push_back(0);
           // posi[ii] = seq_pos + 1;
@@ -405,214 +431,110 @@ bool cpg(const int & base1, const int & base2){
   return(base1==1 && base2==2);
 }
 
+bool check_base_quality(general_settings &settings,
+                   const alignment_data &d,
+                        size_t &i_l, size_t &i_r){
+  bool trash=false;
+  if (d.t_seq[i_l] >=4 || d.t_seq[i_r] >= 4 || // is read N
+      d.t_ref[i_l] >=4 || d.t_ref[i_r] >= 4 || // is reference N
+      d.t_qs[i_l] <settings.minbaseQ | d.t_seq[i_r] < settings.minbaseQ || // base quality
+      (i_l>0 && base_is_indel(d.t_ref[i_l-1], d.t_seq[i_l-1])) // left is indel
+      (i_r+1 <= d.t_seq.size()-1 && base_is_indel(d.t_ref[i_r+1], d.t_seq[i_r+1])) // right is indel
+      ) {
+    trash = true;
+  }
+  return trash;
+}
+
+unint get_bc(const int & obs, // no error
+             const int & no_ch, // deamin or mut or error
+             const int &ch){ // error (could also be deamin then error)
+  if(obs == no_ch){
+    return 0;
+  } else if (obs == ch){
+    return 1;
+  } else {
+    return 2;
+  }
+}
+
 void add_aligned_data(general_settings &settings,
                       const alignment_data &d,
-                      const keeplist_map &cpg_map,
-                      const char *ref,
-                      std::vector<per_site> &data,
+                      ptr_obs &cpg_data,
+                      ptr_obs &nocpg_data,
                       std::vector<int> &tm,
-                      per_site_nocpg &nocpg_data,
                       my_cov_rg & cov_rg,
                       size_t & rg_idx,
                       size_t & ncycles,
                       size_t & exclude_CnonCpG) {
+      const unint &_se, // seq error 1-40
+      const unint &_me, // mapping error 1-40
+      const unint &_rg  // read group idx 1-x
 
-  size_t b1, b2;
-  int r_base1, r_base2, s_base1, s_base2;
-  size_t dist_5p, dist_3p;
-  size_t pos, prime;
-
-  per_site *p_per_site;
+  unint dist_5p, dist_3p;
+  unint pos, prime, bc;
+  unint rl = (d.n_nucleotides == ncycles);
   size_t data_idx=0;
   double seqerror = 0;
-  double maperror = PHRED_TO_PROB_CONVERTER[d.mapQ];
-  int base_composition; // 0,1,2
+  //double maperror = PHRED_TO_PROB_CONVERTER[d.mapQ];
+
   bool include_in_cpg = false;
   bool include_in_tally = false;
-  for (size_t i = 0; i < d.t_seq.size()-1; i++){
-    include_in_cpg = true;
-    include_in_tally = true;
 
-    if(d.strand){ // negative strand
-      b1 = d.t_seq.size()-i-2;
-      b2 = d.t_seq.size()-i-1; // closest to 5 prime
-      get_bases(d, b1, b2, r_base1, r_base2, s_base1, s_base2);
-
-      if(nucleotide_missing(r_base1, r_base2, s_base1, s_base2) ||  d.t_qs[b1] < settings.minbaseQ || d.t_qs[b2] < settings.minbaseQ ){
+  if (d.strand){ // true for negative strand
+    for (size_t i = d.t_seq.size()-1; i>0 ; i--){
+      if(check_base_quality(settings, d, i-1, i))
         continue;
-      }
 
-      // check if left side is an indel
-      if(b1>0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
+      if(d.t_ref[i] != 2)
         continue;
-      }
 
-      // check if right side is an indel
-      if(b2+1 < d.t_seq.size()-1 && base_is_indel(d.t_ref[b2+1], d.t_seq[b2+1])){
-        continue;
-      }
-
-      dist_5p = d.t_isop[b2];
-      dist_3p = d.t_posi[b2];
-      seqerror = PHRED_TO_PROB_CONVERTER[d.t_qs[b2]];
+      dist_5p = d.t_isop[i];
+      dist_3p = d.t_posi[i];
       get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
 
-      // discard 3prime data, if read == number of cycles.
-      if (prime==1 && d.n_nucleotides==ncycles){
-        // instead of discarding, we should just use the postions relative to the 5 prime.
-        // if 40 bp from 5prime and 30bp from 3 prime, we will just use the 40bp 5 prime.
+      // if read == number of cycles. use the postions relative to the 5 prime.
+      if (prime==1 && d.n_nucleotides==ncycles)
         get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
-        // continue;
-      }
 
-      if(refToInt[(int)ref[d.t_positions[b1]]]==4 || refToInt[(int)ref[d.t_positions[b2]]]==4){
-        include_in_tally=false;
-      }
-
-
-      if (s_base2 == 2){
-        base_composition = 0;  // no error
-      } else if (s_base2 == 0){
-        base_composition = 1;  // deamin or error
-      } else {
-        base_composition = 2; // error (could also be deamin then error)
-      }
-
-      if(no_ref_cpg(r_base1, r_base2)){
-        if(refToInt[(int)ref[d.t_positions[b2]]]==2 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx] && exclude_CnonCpG==0){
-          nocpg_data.pos_to_end.push_back(pos);
-          nocpg_data.prime.push_back(prime);
-          nocpg_data.base_compos.push_back(base_composition);
-          nocpg_data.seqerrors.push_back(seqerror);
-          nocpg_data.maperrors.push_back(maperror);
-          nocpg_data.rgs.push_back(rg_idx);
-          nocpg_data.readlengths.push_back(d.n_nucleotides);
-          nocpg_data.depth++;
-          cov_rg.nocpg[rg_idx]++;
+      bc = get_bc(d.t_seq[i], 2, 0);
+      if(no_ref_cpg(d.t_ref[i-1], d.t_ref[i])){
+        if ((d.t_ref[i] == 2) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
+          nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
         }
-        include_in_cpg = false;
-      }
-    } else { // positive strand
-      b1 = i; // closest to 5 prime
-      b2 = i+1;
-      get_bases(d, b1, b2, r_base1, r_base2, s_base1, s_base2);
-
-      if(nucleotide_missing(r_base1, r_base2, s_base1, s_base2) ||  d.t_qs[b1] < settings.minbaseQ || d.t_qs[b2] < settings.minbaseQ ){
-        continue;
-      }
-
-      // check if left side has an indel
-      if(b1>0 && base_is_indel(d.t_ref[b1-1], d.t_seq[b1-1])){
-        continue;
-      }
-
-      // check if right side has an indel
-      if(b2+1 < d.t_seq.size()-1 && base_is_indel(d.t_ref[b2+1], d.t_seq[b2+1])){
-        continue;
-      }
-
-      dist_5p = d.t_posi[b1];
-      dist_3p = d.t_isop[b1];
-      seqerror = PHRED_TO_PROB_CONVERTER[d.t_qs[b1]];
-      get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
-
-      // discard 3prime data, if read == number of cycles.
-      if (prime==1 && d.n_nucleotides==ncycles){
-        // instead of discarding, we should just use the postions relative to the 5 prime.
-        // if 40 bp from 5prime and 30bp from 3 prime, we will just use the 40bp 5 prime.
-        get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
-        // continue;
-      }
-
-      if(refToInt[(int)ref[d.t_positions[b1]]]==4 || refToInt[(int)ref[d.t_positions[b2]]]==4){
-        include_in_tally=false;
-      }
-
-      if (s_base1 == 1){
-        base_composition = 0;  // no error
-      } else if (s_base1 == 3){
-        base_composition = 1;  // deamin or error
       } else {
-        base_composition = 2; // error (could also be deamin then error)
+        cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
       }
+      tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i-1], d.t_ref[i], d.t_seq[i-1], d.t_seq[i])]++;
+    }
+  } else {
+    for (size_t i = 0; i<d.t_seq.size()-1; i++){
+      if(check_base_quality(settings, d, i, i+1))
+        continue;
 
-      if(no_ref_cpg(r_base1, r_base2)){
-        if(refToInt[(int)ref[d.t_positions[b1]]]==1 && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx] && exclude_CnonCpG==0){
-          nocpg_data.pos_to_end.push_back(pos);
-          nocpg_data.prime.push_back(prime);
-          nocpg_data.base_compos.push_back(base_composition);
-          nocpg_data.seqerrors.push_back(seqerror);
-          nocpg_data.maperrors.push_back(maperror);
-          nocpg_data.readlengths.push_back(d.n_nucleotides);
-          nocpg_data.rgs.push_back(rg_idx);
-          nocpg_data.depth++;
-          cov_rg.nocpg[rg_idx]++;
+        if(d.t_ref[i] != 1)
+          continue;
+
+        dist_5p = d.t_isop[i];
+        dist_3p = d.t_posi[i];
+        get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
+
+        // if read == number of cycles. use the postions relative to the 5 prime.
+        if (prime==1 && d.n_nucleotides==ncycles)
+          get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+
+        bc = get_bc(d.t_seq[i], 1, 3);
+        if(no_ref_cpg(d.t_ref[i], d.t_ref[i+1])){
+          if ((d.t_ref[i] == 1) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
+            nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
+          }
+        } else {
+          cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
         }
-        include_in_cpg = false;
+        tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i], d.t_ref[i+1], d.t_seq[i], d.t_seq[i+1])]++;
       }
-
-    }
-    if(include_in_tally){
-      tm[get_idx_tm(pos, prime, d.strand, r_base1, r_base2, s_base1, s_base2)]++;
-    }
-    if(include_in_cpg){
-      data_idx = cpg_map.at(d.t_positions[b1]);
-      p_per_site = &data[data_idx];
-      p_per_site->position = d.t_positions[b1];
-
-      p_per_site->depth++;
-      p_per_site->strand.push_back(d.strand);
-
-      p_per_site->pos_to_end.push_back(pos);
-      p_per_site->prime.push_back(prime);
-
-      p_per_site->base_compos.push_back(base_composition);
-      p_per_site->seqerrors.push_back(seqerror);
-      p_per_site->maperrors.push_back(maperror);
-      p_per_site->readlengths.push_back(d.n_nucleotides);
-      p_per_site->rgs.push_back(rg_idx);
-      cov_rg.cpg[rg_idx]++;
-      p_per_site->bases.push_back(std::make_pair(s_base1, s_base2));
-      p_per_site->quals.push_back(
-          std::make_pair(PHRED_TO_PROB_CONVERTER[d.t_qs[b1]],
-                         PHRED_TO_PROB_CONVERTER[d.t_qs[b2]]));
-    }
   }
 }
-
-struct F_void {
-  general_settings * settings;
-  std::vector<pre_calc_per_site> * data;
-  per_mle_run * mle_data;
-  size_t iteration;
-  F_void(general_settings * s, std::vector<pre_calc_per_site> * d, per_mle_run * m){
-    settings = s;
-    data = d;
-    mle_data = m;
-    iteration = 0;
-  }
-};
-
-struct deamrates_void {
-  general_settings * settings;
-  std::vector<per_site> *data;
-  per_site_nocpg *nocpg_data;
-  size_t iteration, rg_idx;
-  std::vector<std::vector<size_t>> *cpg_idx;
-  std::vector<size_t> *nocpg_idx;
-  deamrates_void(general_settings * s, std::vector<per_site> *d,
-                 per_site_nocpg *nocpg_d, size_t &r_idx,
-                 std::vector<std::vector<size_t>> *c_idx,
-                 std::vector<size_t> *nc_idx) {
-    settings = s;
-    data = d;
-    nocpg_data = nocpg_d;
-    rg_idx = r_idx;
-    cpg_idx = c_idx;
-    nocpg_idx = nc_idx;
-    iteration = 0;
-  }
-};
 
 size_t get_param_idx(const size_t & max_pos_to_end, const size_t & meth, const size_t & pos_to_end, const size_t & prime){
   return (meth * PRIMES * ( max_pos_to_end+2 ) + pos_to_end * PRIMES  + prime);
@@ -810,7 +732,15 @@ std::vector<double> single_array_parameters(const size_t & max_pos_to_end, const
 // -109750 with BOBYQA 10 minutes
 // -109747 with MMA (requires derivatives) 20 seconds wuhu
 // void run_deamrates_optim(general_settings & settings, const std::vector<double> & tmf, std::vector<per_site> data){
-void run_deamrates_optim(general_settings & settings, const std::vector<double> & tmf, std::vector<per_site> & data, per_site_nocpg & nocpg_data , std::string & rg, size_t & rg_idx, my_cov_rg & cov_rg){
+
+/// got this far
+void run_deamrates_optim(general_settings & settings,
+                         const std::vector<double> & tmf,
+                         ptr_obs &cpg_data,
+                         ptr_obs &nocpg_data,
+                         std::string & rg,
+                         size_t & rg_idx,
+                         my_cov_rg & cov_rg){
   time_t start_time_optim,end_time_optim;
   time(&start_time_optim);
   std::string filename = settings.outbase + "." + rg + ".deamrates";
@@ -1529,38 +1459,6 @@ double calc_prob_obs_base(const double & seqerror, const size_t & base_compos, c
   return res;
 }
 
-void mark_no_deam_CT_GA(general_settings & settings, std::vector<per_site> & data){
-  std::default_random_engine generator;
-  std::uniform_real_distribution<double> distribution(0.0,1.0);
-
-  std::string filename = settings.outbase +".excludedCpGs";
-  std::ofstream f (filename.c_str());
-  checkfilehandle(f, filename);
-
-
-  for (auto & site: data){
-    double prob_seqerrors=1;
-    for (size_t i=0; i<site.depth; i++){
-      // + strand and g->a
-      if(site.strand[i]==0 && site.bases[i].second==0){
-        site.no_deam_CT_GA++;
-        prob_seqerrors *= site.seqerrors[i]/3.0;
-      }
-      // - strand and c->t
-      if(site.strand[i]==1 && site.bases[i].first==3){
-        site.no_deam_CT_GA++;
-        prob_seqerrors *= site.seqerrors[i]/3.0;
-      }
-    }
-    // we keep a site with probability prop_seqerrors i.e the observations are a series of sequencing errors and not true variants.
-    double accept_val = distribution(generator);
-    if(site.no_deam_CT_GA>1 && accept_val>prob_seqerrors){
-      site.exclude_for_deam = true;
-      f << settings.chrom << " " << site.position << '\n';
-    }
-  }
-}
-
 void update_dinucl_priors(general_settings & settings){
   std::vector<double> res;
   std::stringstream ss( settings.priors_str );
@@ -1677,14 +1575,13 @@ void est_dam_only(general_settings & settings) {
   // parsing bedfile if provided
   if(!settings.bed_f.empty()){
     parse_bed_file(settings, bed_coord);
-    std::cerr << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
-    settings.args_stream << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
+    settings.buffer += "\t-> Analyzing: " + std::to_string(bed_coord.size()) + " BED regions on chrom: " + settings.chrom + '\n';
+    print_log(settings);
 
     if(bed_coord.size()==0){
       std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
       exit(EXIT_SUCCESS);
     }
-
   }
 
   // open BAM for reading
@@ -1728,12 +1625,12 @@ void est_dam_only(general_settings & settings) {
       ss >> rg >> cycle_string;
       if(cycle_string.empty()){
         cycle=std::numeric_limits<size_t>::max();
-        std::cerr << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
-        settings.args_stream << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
+        settings.buffer += "\t-> RG: " + rg + '\n';
+        print_log(settings);
       } else {
         cycle=std::stoi(cycle_string);
-        std::cerr << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
-        settings.args_stream << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
+        settings.buffer += "\t-> RG: " + rg + ". Sequencing cycles: " + cycle_string + '\n';
+        print_log(settings);
       }
       rgs.push_back(rg);
       cycles.push_back(cycle);
@@ -1745,12 +1642,14 @@ void est_dam_only(general_settings & settings) {
   } else {
     rg_split = false;
     rgs.push_back(ALL_RG);
+    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG
     if(settings.cycles!=std::numeric_limits<size_t>::max()){
       cycles.push_back(settings.cycles);
+      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles)
     } else {
       cycles.push_back(std::numeric_limits<size_t>::max());
     }
-    settings.buffer += "\t-> Merging all reads into a single read group named: " + rgs[0] + " and sequencing cycles: " + std::to_string(cycles[0]) + '\n';
+    settings.buffer += '\n';
     print_log(settings);
   }
 
@@ -1788,22 +1687,25 @@ void est_dam_only(general_settings & settings) {
   my_cov_rg cov_rg(rgs.size());
 
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
-  const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+  // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+  const v_un_ch cpg_bool = get_c_and_cpg_chrom(ref, seq_len)
   settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + settings.chrom + '\n';
   print_log(settings);
 
   // do not included CnonCpGs if deamrates are already provided.
   std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
 
-  std::vector<per_site> data;
-  data.resize(cpg_map.size());
-  size_t nocpg_to_include = 1e6;
-  per_site_nocpg nocpg_data(nocpg_to_include);
+  ptr_obs cpg_data, nocpg_data;
+  // std::vector<per_site> data;
+  // data.resize(cpg_map.size());
+  //size_t nocpg_to_include = 1e6;
+  // per_site_nocpg nocpg_data(nocpg_to_include);
 
   bam1_t *rd = bam_init1();
+  alignment_data d;
   int reads = 1e6;
   int counter = 0;
-  alignment_data d;
+
   size_t trashed=0, reads_skipped=0;
   size_t startpos, endpos;
   bool skipread=true;
@@ -1821,14 +1723,10 @@ void est_dam_only(general_settings & settings) {
     }
     counter++;
 
+    // check that a cpg is present
     // this is 50% faster than analyzing every single read.
     startpos = rd->core.pos;
     endpos = bam_endpos(rd);
-
-    // auto hit = std::find(cpg_bool.begin()+startpos, cpg_bool.begin()+endpos, 1);
-    // if(hit!=cpg_bool.begin()+endpos){
-    //   skipread=false;
-    // }
     for (size_t i=startpos; i<=endpos; i++){
       if(cpg_bool[i]==1){
         skipread=false;
@@ -1848,9 +1746,6 @@ void est_dam_only(general_settings & settings) {
       trashed++;
       continue;
     }
-
-    // when adding the rd to data, we should also add the RG as a vector. It
-    // could be integers referecing the all the RG found in the header..
 
     if (rg_split) {
       rgptr = bam_aux_get(rd, "RG");
@@ -1879,7 +1774,7 @@ void est_dam_only(general_settings & settings) {
    }
 
    d = align_read(rd, ref);
-   add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
+   add_aligned_data(settings, d, cpg_data, nocpg_data, tm[rgname_idx], cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
   }
   time(&end_time_load_data);
   settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
@@ -1919,7 +1814,7 @@ void est_dam_only(general_settings & settings) {
     }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
       print_log(settings);
-      run_deamrates_optim(settings, tmf[i], data, nocpg_data, rgs[i], i, cov_rg);
+      run_deamrates_optim(settings, tmf[i], cpg_data, nocpg_data, rgs[i], i, cov_rg);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);
@@ -1933,425 +1828,6 @@ void est_dam_only(general_settings & settings) {
   bam_destroy1(rd);
   bam_hdr_destroy(header);
   sam_close(in);
-}
-
-int est_dam_and_F(general_settings & settings) {
-
-  // update priors if provided
-  if(!settings.priors_str.empty()){
-    update_dinucl_priors(settings);
-  }
-
-  std::string stream_filename (settings.outbase+".args");
-  settings.args_stream.open(stream_filename.c_str());
-  checkfilehandle(settings.args_stream, stream_filename);
-  settings.args_stream << settings.all_options;
-
-
-  // write priors to log
-  std::cerr << "\t-> PRIORS (-h): " << std::exp(LOG_PRIORS[0]);
-  settings.args_stream  << "\t-> PRIORS (-h): " << std::exp(LOG_PRIORS[0]);
-  for (auto it=LOG_PRIORS.begin()+1; it!=LOG_PRIORS.end();it++){
-    std::cerr  << "," << std::exp(*it);
-    settings.args_stream  << "," << std::exp(*it);
-  }
-  std::cerr << '\n';
-  settings.args_stream << '\n';
-
-
-  std::vector<std::pair<size_t, size_t>> bed_coord;
-  // parsing bedfile if provided
-  if(!settings.bed_f.empty()){
-    parse_bed_file(settings, bed_coord);
-    std::cerr << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
-    settings.args_stream << "\t-> Analyzing: " << bed_coord.size() << " BED regions on chrom: " << settings.chrom << '\n';
-
-    if(bed_coord.size()==0){
-      std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
-      exit(EXIT_SUCCESS);
-    }
-
-  }
-
-  // open BAM for reading
-  samFile *in = sam_open(settings.bam_fn.c_str(), "r");
-  if (in == NULL) {
-    std::cerr << "Unable to open BAM/SAM file: " << bam << '\n';
-    exit(EXIT_FAILURE);
-  }
-
-  // Get the header
-  bam_hdr_t *header = sam_hdr_read(in);
-  if (header == NULL) {
-    sam_close(in);
-    std::cerr << "Unable to open BAM header: " << bam << '\n';
-    exit(EXIT_FAILURE);
-  }
-
-  // Load the index
-  hts_idx_t *idx = sam_index_load(in, settings.bam_fn.c_str());
-
-  if (idx == NULL) {
-    std::cerr
-        << "Unable to open BAM/SAM index. Make sure alignments are indexed."
-        << '\n';
-    exit(EXIT_FAILURE);
-  }
-
-  // load read groups
-  bool rg_split;
-  std::vector<std::string> rgs;
-  std::vector<size_t> cycles;
-  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
-    rg_split = true;
-    std::ifstream f (settings.readgroups_f.c_str());
-    checkfilehandle(f, settings.readgroups_f);
-    std::string row, rg, cycle_string;
-    size_t cycle;
-    std::stringstream ss;
-    while(getline(f, row)){
-      ss.str(row);
-      ss >> rg >> cycle_string;
-      if(cycle_string.empty()){
-        cycle=std::numeric_limits<size_t>::max();
-        std::cerr << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
-        settings.args_stream << "\t-> RG: " << rg  << ". setting sequencing cycles: " << cycle << '\n';
-      } else {
-        cycle=std::stoi(cycle_string);
-        std::cerr << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
-        settings.args_stream << "\t-> RG: " << rg  << ". sequencing cycles: " << cycle << '\n';
-      }
-      rgs.push_back(rg);
-      cycles.push_back(cycle);
-      ss.clear();
-      rg.clear();
-      cycle_string.clear();
-    }
-    f.close();
-  } else {
-    rg_split = false;
-    rgs.push_back(ALL_RG);
-    if(settings.cycles!=std::numeric_limits<size_t>::max()){
-      cycles.push_back(settings.cycles);
-    } else {
-      cycles.push_back(std::numeric_limits<size_t>::max());
-    }
-    std::cerr << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
-    settings.args_stream << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
-  }
-
-  // go to the correct chromosome
-  // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
-  hts_itr_t *iter = sam_itr_querys(idx, header, settings.chrom.c_str());
-
-  // load ref of that chromosome
-  faidx_t *fai = ref_init(settings.reference_fn);
-
-  char *ref = fetch_chrom(fai, settings.chrom);
-
-  size_t seq_len = faidx_seq_len(fai, settings.chrom.c_str());
-
-  if (!settings.exclude_bed_fn.empty()) {
-    std::cerr << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
-    settings.args_stream << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
-    filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
-  }
-
-  if (!settings.exclude_sites_fn.empty()) {
-    std::cerr << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
-    settings.args_stream << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
-    filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
-  }
-
-  std::vector<std::vector<double>> tmf;
-  tmf.resize(rgs.size());
-  std::vector<std::vector<int>> tm;
-  tm.resize(rgs.size());
-  for (size_t i=0; i<rgs.size(); i++){
-    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
-  }
-
-  my_cov_rg cov_rg(rgs.size());
-
-  const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
-  const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
-  std::cerr << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
-  settings.args_stream << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
-
-  // do not included CnonCpGs if deamrates are already provided.
-  std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
-  for (size_t i=0; i<rgs.size(); i++){
-    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-      exclude_CnonCpGs[i] = 1;
-      std::cerr << "\t-> No need to include CnonCpGs for " << rgs[i] << " as -D is provided: " << settings.deamrates_filename << '\n';
-      settings.args_stream << "\t-> No need to include CnonCpGs for " << rgs[i] << " as -D is provided: " << settings.deamrates_filename << '\n';
-
-    } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
-      exclude_CnonCpGs[i] = 1;
-      std::cerr << "\t-> No need to include CnonCpGs for " << rgs[i] << " as " << settings.outbase+"."+rgs[i]+".deamrates" << " exists" << '\n';
-      settings.args_stream << "\t-> No need to include CnonCpGs for " << rgs[i] << " as " << settings.outbase+"."+rgs[i]+".deamrates" << " exists" << '\n';
-    }
-  }
-
-
-  std::vector<per_site> data;
-  data.resize(cpg_map.size());
-  size_t nocpg_to_include = 1e6;
-  per_site_nocpg nocpg_data(nocpg_to_include);
-
-  bam1_t *rd = bam_init1();
-  int reads = 1e6;
-  int counter = 0;
-  alignment_data d;
-  size_t trashed=0, reads_skipped=0;
-  size_t startpos, endpos;
-  bool skipread=true;
-  time_t start_time_load_data,end_time_load_data;
-
-  uint8_t *rgptr;
-  std::string rgname;
-  size_t rgname_idx;
-  std::string rname;
-  time(&start_time_load_data);
-  while (sam_itr_next(in, iter, rd) >= 0) {
-    skipread = true;
-    if (counter % reads == 0 && reads) {
-      std::cerr << "\t-> " << counter << " reads processed and " << trashed << " discarded. " << '\r';
-    }
-    counter++;
-
-    // this is 50% faster than analyzing every single read.
-    startpos = rd->core.pos;
-    endpos = bam_endpos(rd);
-
-    // auto hit = std::find(cpg_bool.begin()+startpos, cpg_bool.begin()+endpos, 1);
-    // if(hit!=cpg_bool.begin()+endpos){
-    //   skipread=false;
-    // }
-    for (size_t i=startpos; i<=endpos; i++){
-      if(cpg_bool[i]==1){
-        skipread=false;
-        break;
-      }
-    }
-
-    if(skipread){
-      reads_skipped++;
-      continue;
-    }
-
-    if (rd->core.l_qseq < settings.minreadlength ||
-        rd->core.qual < settings.minmapQ ||
-        (rd->core.flag & settings.flags_off) != 0 ||
-        rd->core.flag & (BAM_FSECONDARY | BAM_FSUPPLEMENTARY)) {
-      trashed++;
-      continue;
-    }
-
-    // when adding the rd to data, we should also add the RG as a vector. It
-    // could be integers referecing the all the RG found in the header..
-
-    if (rg_split) {
-      rgptr = bam_aux_get(rd, "RG");
-      if (rgptr == NULL) {
-        // in the case norg exists. dont know if i should trash or put in
-        // UNKWOWN
-        rname = std::string(bam_get_qname(rd));
-        std::cerr << "[No_found_RG] :: " << rname << '\n';
-        trashed++;
-        continue;
-      } else {
-        // moves past the Z by +1. all
-        // colons are gone already
-        rgname = std::string((const char *)(rgptr + 1));
-        auto match = std::find(rgs.begin(), rgs.end(), rgname);
-        if (match != rgs.end()) {
-          rgname_idx = distance(rgs.begin(), match);
-        } else { // in the case it cannot find the rg. The read will be trashed
-          trashed++;
-          continue;
-        }
-      }
-   } else {
-     rgname=ALL_RG;
-     rgname_idx=ALL_DEAMMETH_RG_IDX;
-   }
-
-   d = align_read(rd, ref);
-   add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
-  }
-  time(&end_time_load_data);
-
-  std::cerr << "\t-> Processed: " << counter  << ". Reads filtered: " <<
-    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
-    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
-
-  settings.args_stream << "\t-> Processed: " << counter  << ". Reads filtered: " <<
-    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
-    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
-  for (size_t i=0; i<rgs.size(); i++){
-    std::cerr << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
-    settings.args_stream << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
-  }
-  for (size_t i=0; i<rgs.size(); i++){
-    std::cerr << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
-    settings.args_stream << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
-    dump_count_file(settings, tm[i], rgs[i]);
-    tmf[i] = read_count_file(settings, rgs[i]);
-  }
-
-  // mark_no_deam_CT_GA(settings, data);
-
-  std::vector<std::vector<double>> param_deam;
-  param_deam.resize(rgs.size());
-
-  settings.args_stream << std::flush;
-  for (size_t i=0; i<rgs.size(); i++){
-    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-      std::cerr << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
-      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-      settings.args_stream << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
-      param_deam[i] = load_deamrates_f(settings);
-    } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
-      std::cerr << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      settings.args_stream << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      param_deam[i] = load_deamrates(settings, rgs[i]);
-    }else {
-      std::cerr << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
-      settings.args_stream << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
-      run_deamrates_optim(settings, tmf[i], data, nocpg_data, rgs[i], i, cov_rg);
-      std::cerr << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      settings.args_stream << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      param_deam[i] = load_deamrates(settings, rgs[i]);
-    }
-  }
-  std::vector<pre_calc_per_site> mle_data;
-
-  double deamin_methylated, deamin_unmethylated;
-  double noM, M;
-  std::cerr << "\t-> Precalculating many things for ML of F." << '\n';
-  mle_data.reserve(data.size());
-  for (const auto &site : data) {
-    // FIXME: do know if we should exclude or include missing sites.
-    // For window sizes, it doesn't matter
-    // for ncpg it means that we do not always analyze the same cpgs per sample.
-    if(!site.depth){
-      continue;
-    }
-    pre_calc_per_site d(site);
-    double  prob_g1, prob_g2;
-    auto g12 = SEVEN_DINUCL_GENOTYPES.begin();
-    for (size_t i = 0; i < site.depth; i++) {
-      deamin_unmethylated = param_deam[site.rgs[i]][get_param_idx(settings.max_pos_to_end, UNMETHSTATE, site.pos_to_end[i], site.prime[i])];
-      // 1 should be replaced by do_haploid_model
-      if(do_haploid_model){
-        noM = calc_prob_obs_base(site.seqerrors[i], site.base_compos[i],
-                                 deamin_unmethylated);
-      } else {
-        prob_g1 =
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].first,
-                      site.bases[i].first, g12->first.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].first,
-                      site.bases[i].first, g12->first.second);
-        prob_g2 =
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].second,
-                      site.bases[i].second, g12->second.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].second,
-                      site.bases[i].second, g12->second.second);
-
-        noM = prob_g1 * prob_g2;
-      }
-      d.pre_noM.push_back(noM);
-
-      deamin_methylated = param_deam[site.rgs[i]][get_param_idx(settings.max_pos_to_end, METHSTATE, site.pos_to_end[i], site.prime[i])];
-
-      // 1 should be replaced by do_haploid_model
-      if(do_haploid_model){
-        M = calc_prob_obs_base(site.seqerrors[i], site.base_compos[i], deamin_methylated);
-      } else {
-        prob_g1 =
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_methylated, site.quals[i].first,
-                      site.bases[i].first, g12->first.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_methylated, site.quals[i].first,
-                      site.bases[i].first, g12->first.second);
-        prob_g2 =
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_methylated, site.quals[i].second,
-                      site.bases[i].second, g12->second.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_methylated, site.quals[i].second,
-                      site.bases[i].second, g12->second.second);
-
-        M = prob_g1 * prob_g2;
-      }
-      d.pre_M.push_back(M);
-
-      d.maperrors.push_back(site.maperrors[i]);
-    }
-    for (auto it=SEVEN_DINUCL_GENOTYPES.begin()+1; it!=SEVEN_DINUCL_GENOTYPES.end(); it++){
-      double res=0;
-      for (size_t i = 0; i < site.depth; i++) {
-        deamin_unmethylated =
-            param_deam[site.rgs[i]]
-                      [get_param_idx(settings.max_pos_to_end, UNMETHSTATE,
-                                     site.pos_to_end[i], site.prime[i])];
-        prob_g1 =
-            // std::log((1 - site.maperrors[i]) *
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].first,
-                      site.bases[i].first, it->first.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].first,
-                      site.bases[i].first, it->first.second);
-        // + site.maperrors[i] * DINUCL_FLAT_PRIOR; //);
-        prob_g2 =
-            // std::log((1 - site.maperrors[i]) *
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].second,
-                      site.bases[i].second, it->second.first) +
-            0.5 * base_condition_one_genotype(
-                      site.strand[i], deamin_unmethylated, site.quals[i].second,
-                      site.bases[i].second,
-                      it->second.second);
-        // + site.maperrors[i] * DINUCL_FLAT_PRIOR);
-        res += std::log((1-site.maperrors[i]) * (prob_g1 * prob_g2) +
-                        site.maperrors[i] * DINUCL_FLAT_PRIOR);
-      }
-      size_t idx_prior = std::distance(SEVEN_DINUCL_GENOTYPES.begin(), it);
-      d.remaining_dinucl_genotypes.push_back(res + LOG_PRIORS[idx_prior]);
-    }
-    mle_data.push_back(d);
-    // if(d.position==112256){
-    //   print_d(d);
-    // }
-  }
-  data.clear();
-  if(settings.bed_f.empty()){
-    std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
-    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".F" << '\n';
-    run_mle(settings, mle_data);
-
-  } else {
-    std::cerr << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
-    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
-    run_mle_bed(settings, mle_data, bed_coord);
-  }
-  std::cerr << "\t-> Cleaning up." << '\n';
-  settings.args_stream << std::flush;
-  mle_data.clear();
-  free(ref);
-  hts_itr_destroy(iter);
-  hts_idx_destroy(idx);
-  bam_destroy1(rd);
-  bam_hdr_destroy(header);
-  sam_close(in);
-  return 1;
 }
 
 

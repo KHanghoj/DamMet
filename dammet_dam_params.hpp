@@ -101,6 +101,27 @@ struct per_mle_run {
   }
 } ;
 
+struct deamrates_void {
+  general_settings * settings;
+  std::vector<per_site> *data;
+  per_site_nocpg *nocpg_data;
+  size_t iteration, rg_idx;
+  std::vector<std::vector<size_t>> *cpg_idx;
+  std::vector<size_t> *nocpg_idx;
+  deamrates_void(general_settings * s, std::vector<per_site> *d,
+                 per_site_nocpg *nocpg_d, size_t &r_idx,
+                 std::vector<std::vector<size_t>> *c_idx,
+                 std::vector<size_t> *nc_idx) {
+    settings = s;
+    data = d;
+    nocpg_data = nocpg_d;
+    rg_idx = r_idx;
+    cpg_idx = c_idx;
+    nocpg_idx = nc_idx;
+    iteration = 0;
+  }
+};
+
 
 struct alignment_data {
   alignment_data () {
@@ -142,13 +163,15 @@ struct Obs {
 };
 
 struct Site {
-  Site(const unint &_pos,
+  Site(const unint &_chrom,
+       const unint &_pos,
        const unint &_ref):
-    pos(_pos), ref(_ref){
+    chrom(_chrom), pos(_pos), ref(_ref){
     // data.reserve(20);
   }
   int pos, depth=0;
-  unint ref : 3;  // 0-5 A,C,G,T,N,Del
+  unint ref: 3;  // 0-5 A,C,G,T,N,Del
+  // unint cpg: 1;
   std::vector<std::unique_ptr<Obs>> data;
 };
 
