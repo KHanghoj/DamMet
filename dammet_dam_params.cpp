@@ -1750,11 +1750,6 @@ void est_dam_only(general_settings & settings) {
     } else {
       cycles.push_back(std::numeric_limits<size_t>::max());
     }
-    // std::string out = "\t-> Merging all reads into a single read group named: ";
-    // out << rgs[0] << " and sequencing cycles: " << cycles[0];
-
-    // print_log(settings,
-    //           out);
     settings.buffer += "\t-> Merging all reads into a single read group named: " + rgs[0] + " and sequencing cycles: " + std::to_string(cycles[0]) + '\n';
     print_log(settings);
   }
@@ -1890,11 +1885,12 @@ void est_dam_only(general_settings & settings) {
   settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
     ". Reads filtered: " + std::to_string(trashed) +
     ". Reads skipped (nocpg overlap): " + std::to_string(reads_skipped) +
-    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) +
-    " seconds." + '\n';
+    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
   print_log(settings);
   for (size_t i=0; i<rgs.size(); i++){
-    settings.buffer += "\t-> Total_Observations RG: "+ rgs[i] + " CpG: " + std::to_string(cov_rg.cpg[i]) + " CpGCoverage: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) +  ". CnonCpG: " + std::to_string(cov_rg.nocpg[i]) + '\n';
+    settings.buffer += "\t-> Total_Observations RG: "+ rgs[i] +
+      " CpG: " + std::to_string(cov_rg.cpg[i]) +
+      " CpGCoverage and CnonCpGCoverage: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) + " " + std::to_string(cov_rg.nocpg[i]) + '\n';
     print_log(settings);
   }
   for (size_t i=0; i<rgs.size(); i++){
@@ -1912,20 +1908,20 @@ void est_dam_only(general_settings & settings) {
   settings.args_stream << std::flush;
   for (size_t i=0; i<rgs.size(); i++){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-      std::cerr << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
+      settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
+      print_log(settings);
       std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-      settings.args_stream << "\t-> Loading deamination rates from " << settings.deamrates_filename << '\n';
       param_deam[i] = load_deamrates_f(settings);
     } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
-      std::cerr << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      settings.args_stream << "\t-> Loading deamination rates from " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
+      print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);
     }else {
-      std::cerr << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
-      settings.args_stream << "\t-> Starting Optim of deamination rates. RG: " << rgs[i] << '\n';
+      settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
+      print_log(settings);
       run_deamrates_optim(settings, tmf[i], data, nocpg_data, rgs[i], i, cov_rg);
-      std::cerr << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
-      settings.args_stream << "\t-> Dumping deamination parameters to " << settings.outbase+"."+rgs[i]+".deamrates" << '\n';
+      settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
+      print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);
     }
   }
@@ -2355,6 +2351,7 @@ int est_dam_and_F(general_settings & settings) {
   bam_destroy1(rd);
   bam_hdr_destroy(header);
   sam_close(in);
+  return 1;
 }
 
 
@@ -2377,7 +2374,7 @@ int main(int argc, char *argv[]) {
 
   // last option should be to get F from est dam only
   if(0){
-    est_dam_and_F(settings);
+    int a=est_dam_and_F(settings);
   } else {
     est_dam_only(settings);
   }
@@ -2385,6 +2382,6 @@ int main(int argc, char *argv[]) {
   double time_gone = difftime(end_time, start_time);
   size_t minutes = time_gone / 60.0;
   size_t seconds = (int)time_gone % 60;
-  std::cerr << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
-  settings.args_stream << "\t-> Done in " << minutes << ":" << seconds << " M:S." << std::endl;
+  settings.buffer += "\t-> Done in " + std::to_string(minutes)+ ":" + std::to_string(seconds) + " M:S.";
+  print_log(settings);
 }
