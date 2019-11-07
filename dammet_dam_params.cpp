@@ -1757,8 +1757,6 @@ void est_dam_only(general_settings & settings) {
     //           out);
     settings.buffer += "\t-> Merging all reads into a single read group named: " + rgs[0] + " and sequencing cycles: " + std::to_string(cycles[0]) + '\n';
     print_log(settings);
-
-    // settings.args_stream << "\t-> Merging all reads into a single read group named: " << rgs[0] << " and sequencing cycles: " << cycles[0]  << '\n';
   }
 
   // go to the correct chromosome
@@ -1773,14 +1771,14 @@ void est_dam_only(general_settings & settings) {
   size_t seq_len = faidx_seq_len(fai, settings.chrom.c_str());
 
   if (!settings.exclude_bed_fn.empty()) {
-    std::cerr << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
-    settings.args_stream << "\t-> Masking genomic BED regions (-e) " << settings.exclude_bed_fn << '\n';
+    settings.buffer += "\t-> Masking genomic BED regions (-e) " + settings.exclude_bed_fn + '\n';
+    print_log(settings);
     filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
   }
 
   if (!settings.exclude_sites_fn.empty()) {
-    std::cerr << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
-    settings.args_stream << "\t-> Masking genomic sites sites (-E) " << settings.exclude_sites_fn << '\n';
+    settings.buffer += "\t-> Masking genomic sites sites (-E) " + settings.exclude_sites_fn + '\n';
+    print_log(settings);
     filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
   }
 
@@ -1796,8 +1794,8 @@ void est_dam_only(general_settings & settings) {
 
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
   const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
-  std::cerr << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
-  settings.args_stream << "\t-> " << cpg_map.size() << " CpG's in chrom: " << settings.chrom << '\n';
+  settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + settings.chrom + '\n';
+  print_log(settings);
 
   // do not included CnonCpGs if deamrates are already provided.
   std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
@@ -1889,21 +1887,19 @@ void est_dam_only(general_settings & settings) {
    add_aligned_data(settings, d, cpg_map, ref, data, tm[rgname_idx], nocpg_data, cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
   }
   time(&end_time_load_data);
-
-  std::cerr << "\t-> Processed: " << counter  << ". Reads filtered: " <<
-    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
-    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
-
-  settings.args_stream << "\t-> Processed: " << counter  << ". Reads filtered: " <<
-    trashed << ". Reads skipped (nocpg overlap): " << reads_skipped <<
-    ". Loaded in " << difftime(end_time_load_data, start_time_load_data) << " seconds." << '\n';
+  settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
+    ". Reads filtered: " + std::to_string(trashed) +
+    ". Reads skipped (nocpg overlap): " + std::to_string(reads_skipped) +
+    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) +
+    " seconds." + '\n';
+  print_log(settings);
   for (size_t i=0; i<rgs.size(); i++){
-    std::cerr << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
-    settings.args_stream << "\t-> Total_Observations RG: "<< rgs[i] << " CpG: " << cov_rg.cpg[i] << " CpGCoverage: " << (double)cov_rg.cpg[i]/(double)cpg_map.size() <<  ". CnonCpG: " << cov_rg.nocpg[i] << '\n';
+    settings.buffer += "\t-> Total_Observations RG: "+ rgs[i] + " CpG: " + std::to_string(cov_rg.cpg[i]) + " CpGCoverage: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) +  ". CnonCpG: " + std::to_string(cov_rg.nocpg[i]) + '\n';
+    print_log(settings);
   }
   for (size_t i=0; i<rgs.size(); i++){
-    std::cerr << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
-    settings.args_stream << "\t-> Dumping count file: " << settings.outbase << "." << rgs[i] <<  ".tallycounts" << '\n';
+    settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + rgs[i] +  ".tallycounts" + '\n';
+    print_log(settings);
     dump_count_file(settings, tm[i], rgs[i]);
     tmf[i] = read_count_file(settings, rgs[i]);
   }
