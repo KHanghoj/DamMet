@@ -20,38 +20,9 @@
 #include "load_fasta.hpp"
 #include "nucl_conv.hpp"
 #include "myargparser.hpp"
-
-// FIXME: should reflect the presence of the observed base
-double BASE_FREQ_FLAT_PRIOR = 0.25;
-double DINUCL_FLAT_PRIOR = 1.0/7.0;
-
-
-
-const size_t PRIMES=2;
-const size_t STRANDS=2;
-const size_t NUCLEOTIDES=4;
-const size_t METHSTATES=2;
-const size_t METHSTATE=0;
-const size_t UNMETHSTATE=1;
-
-const size_t READPOS_MULT = PRIMES*STRANDS*std::pow(NUCLEOTIDES,4);
-const size_t PRIME_MULT = STRANDS*std::pow(NUCLEOTIDES,4);
-const size_t STRAND_MULT = std::pow(NUCLEOTIDES,4);
-const size_t B1_MULT = std::pow(NUCLEOTIDES,3);
-const size_t B2_MULT = std::pow(NUCLEOTIDES,2);
-const size_t B3_MULT = NUCLEOTIDES;
-
-const size_t N_types_TM = 7;
-
-const size_t MAX_PHRED = 255;
-
-const double SMALLTOLERANCE = 1e-7;
-
-
+#include "constants.hpp"
 
 /// STRUCTS
-
-
 struct my_cov_rg {
   std::vector<size_t> nocpg, cpg;
   my_cov_rg(size_t rgs_size){
@@ -131,16 +102,69 @@ struct per_mle_run {
 
 
 struct alignment_data {
-  size_t strand, mapQ, n_nucleotides;
-  std::vector<size_t> t_seq, t_posi, t_isop, t_qs, t_ref, t_positions;
   alignment_data () {
     t_seq.reserve(100), t_posi.reserve(100), t_isop.reserve(100), t_qs.reserve(100), t_ref.reserve(100), t_positions.reserve(100);
   }
+  size_t strand, mapQ, n_nucleotides;
+  std::vector<size_t> t_seq, t_posi, t_isop, t_qs, t_ref, t_positions;
+
 };
 
 
+// NEW structs
+
+using unint = unsigned int;
+
+struct Obs {
+  Obs(const unint &_pr, // prime 0,1
+      const unint &_st, // strand 0,1
+      const unint &_rp, // readpos int
+      const unint &_rl,  // read length 0,1
+      const unint &_bc, // base composition 0,1,2
+      const unint &_se, // seq error 1-40
+      const unint &_me, // mapping error 1-40
+      const unint &_rg  // read group idx 1-x
+      ):
+    pr(_pr), st(_st),
+    rp(_rp), rl(_rl),
+    bc(_bc), se(_se),
+    me(_me), rg(_rg) {}
+
+  unint pr : 1;  // 0..1  (1 bits)
+  unint st : 1;  // 0..1  (1 bits)
+  unint rp : 6;  // 0..64 (6 bits) 8
+  unint rl : 1;  // 0..1  (1 bits)
+  unint bc : 2;  // 0,1,2 (2 bits) 3
+  unint se : 6;  // 0-40  (6 bits)
+  unint me : 6;  // 0-40  (6 bits)
+  unint rg : 6;  // 0-40  (6 bits) 18
+};
+
+struct Site {
+  Site(const unint &_pos,
+       const unint &_ref):
+    pos(_pos), ref(_ref){
+    // data.reserve(20);
+  }
+  int pos, depth=0;
+  unint ref : 3;  // 0-5 A,C,G,T,N,Del
+  std::vector<std::unique_ptr<Obs>> data;
+};
+
 
 // FUNCTIONS
+
+
+std::vector<double> phred_to_double_converter(){
+  std::vector<double> res;
+  for (size_t phred=0; phred<=MAX_PHRED; phred++){
+    res.push_back(phred_to_double(phred));
+  }
+  return res;
+}
+
+std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
+
 
 inline double oplusnatl(const double & x, const double & y );
 
@@ -193,9 +217,6 @@ using dinucl_pair_of_pairs = std::vector<dinucl_pair_of_pair>;
 std::vector<double> get_log_prior(){
   std::vector<double> res(7, std::log(0));
   res[0] = std::log(1);
-  /* for (const auto & val : res ){ */
-  /*   std::cerr << val << '\n'; */
-  /* } */
   return res;
 }
 

@@ -46,6 +46,35 @@ struct Site {
   std::vector<std::unique_ptr<Obs>> data;
 };
 
+struct Siteold {
+  Siteold(const unint &_pos,
+          const unint &_ref):
+    pos(_pos), ref(_ref){  }
+  int pos, depth=0, ref ;
+  std::vector<int> pr, st, rp, rl, bc, se, me, rg;
+};
+
+
+void Siteold_update(Siteold & d,
+                    const int &_pr, // prime 0,1
+                    const int &_st, // strand 0,1
+                    const int &_rp, // readpos int
+                    const int &_rl,  // read length 0,1
+                    const int &_bc, // base composition 0,1,2
+                    const int &_se, // seq error 1-40
+                    const int &_me, // mapping error 1-40
+                    const int &_rg){  // read group idx 1-x):
+  d.pr.push_back(_pr);
+    d.st.push_back(_st);
+    d.rp.push_back(_rp);
+    d.rl.push_back(_rl);
+    d.bc.push_back(_bc);
+    d.se.push_back(_se);
+    d.me.push_back(_me);
+    d.rg.push_back(_rg);
+    // data.reserve(20);
+}
+
 void print(std::unique_ptr<Obs> & d){
   std::cerr << d->pr << " ";
   std::cerr << d->se << " ";
@@ -57,13 +86,12 @@ void print(std::unique_ptr<Obs> & d){
   std::cerr << d->rg << '\n';
 }
 
-void r1(const size_t & nsites, const size_t & nobs ){
+int r1(const size_t & nsites, const size_t & nobs ){
   std::vector<std::unique_ptr<Site>> all;
   for (size_t pos=0; pos<nsites; pos++){
-    all.push_back(std::make_unique<Site>(pos, 1));
+    all.emplace_back(std::make_unique<Site>(pos, 1));
     for (size_t i=0; i<nobs; i++){
-      // all.back()->data.push_back(std::make_unique<Obs>(0, 1, 10, 1, 1, 40, 30, 1));
-      all.back()->data.push_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
+      all.back()->data.emplace_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
       all.back()->depth++;
     }
   }
@@ -73,25 +101,37 @@ void r1(const size_t & nsites, const size_t & nobs ){
   mem = sizeof(std::unique_ptr<Site>) * all.size();
   mem *= sizeof(std::unique_ptr<Obs>) * all[0]->data.size();
   mem /= MEGABYTE;
+
   std::cerr << all[0]->depth++ << " " << mem << '\n';
-  std::cerr << "sleeping" << '\n';
-  std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+  // std::cerr << "sleeping" << '\n';
+  // std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+  return 1;
 }
 
-void r2(const size_t & nsites, const size_t & nobs ){
-  std::vector<std::unique_ptr<Site>> all;
-  Site d(0,1);
+int r2(const size_t & nsites, const size_t & nobs ){
+
+  // std::unique_ptr<Site> d(std::make_unique<Site>(0,1));
+  std::vector<std::unique_ptr<Obs>> d;
   for (size_t pos=0; pos<nsites*nobs; pos++){
-    d.data.push_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
+    d.emplace_back(std::make_unique<Obs>(0, 1, 10, 1, 1, 40, 30, 1));
   }
   double mem;
   int s=1000;
-  std::cerr << d.data.size() << '\n';
-  mem = sizeof(std::unique_ptr<Obs>) * d.data.size();
+  std::cerr << d.size() << '\n';
+  mem = sizeof(std::unique_ptr<Obs>) * (d.size());
   mem /= MEGABYTE;
   std::cerr << mem << '\n';
-  std::cerr << "sleeping" << '\n';
-  std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+  // std::cerr << "sleeping" << '\n';
+  // std::this_thread::sleep_for(std::chrono::milliseconds(10 * s));
+  return 1;
+}
+
+int old(const size_t & nsites, const size_t & nobs){
+  Siteold d(1,0);
+  for (size_t pos=0; pos<nsites*nobs; pos++){
+    Siteold_update(d, 0, 1, 10, 1, 1, 40, 30, 1);
+  }
+  return 1;
 }
 
 int main(int argc, char * argv[]){
@@ -101,7 +141,41 @@ int main(int argc, char * argv[]){
 }
   size_t nsites = atoi(argv[1]);
   size_t nobs = atoi(argv[2]);
-  r1(nsites, nobs);
-  r2(nsites, nobs);
+  int a = r1(nsites, nobs);
+  //std::cerr << "releasing memory" << '\n';
+  //std::this_thread::sleep_for(std::chrono::milliseconds(5 * 1000));
+  int b = r2(nsites, nobs);
+  //std::cerr << "releasing memory2" << '\n';
+  //std::this_thread::sleep_for(std::chrono::milliseconds(5 * 1000));
+  int c = old(nsites, nobs);
+  //std::cerr << "releasing memory2" << '\n';
+  //std::this_thread::sleep_for(std::chrono::milliseconds(5 * 1000));
+}
 
+
+
+int main2(int argc, char * argv[]){
+  if (argc != 3){
+    std::cerr << "need 'nsites' and 'nobs' argument only" << '\n';
+    exit(EXIT_FAILURE);
+}
+  size_t nsites = atoi(argv[1]);
+  size_t nobs = atoi(argv[2]);
+
+  std::vector<std::unique_ptr<Obs>> d;
+  for (size_t pos=0; pos<nsites*nobs; pos++){
+    d.emplace_back(std::make_unique<Obs>(0, 1, 10, 1, 1, 40, 30, 1));
+  }
+  std::cerr << "not releasing memory2" << '\n';
+  std::this_thread::sleep_for(std::chrono::milliseconds(5 * 1000));
+  std::vector<std::unique_ptr<Site>> all;
+  for (size_t pos=0; pos<nsites; pos++){
+    all.emplace_back(std::make_unique<Site>(pos, 1));
+    for (size_t i=0; i<nobs; i++){
+      all.back()->data.emplace_back(std::make_unique<Obs>(0, 1, 0, 0, 0, 0, 0, 0));
+      all.back()->depth++;
+    }
+  }
+  std::cerr << "not releasing memory" << '\n';
+  std::this_thread::sleep_for(std::chrono::milliseconds(5 * 1000));
 }

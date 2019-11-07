@@ -4,13 +4,7 @@
 #include "nlopt.hpp"
 #include <set>
 #include <ctime>
-
 #include <iomanip> // setprecision
-std::string UNKNOWN_RG("UNKNOWN");
-std::string ALL_RG("ALL_DEAMMETH");
-size_t ALL_DEAMMETH_RG_IDX = 0;
-
-size_t do_haploid_model = 0;
 
 // Returns logl( expl(x)+expl(y) )
 inline double oplusnatl(const double & x, const double & y ){
@@ -47,21 +41,10 @@ bool check_file_exists(std::string filename){
   return f.good();
 }
 
-double phred_to_double(int & phred){
+double phred_to_double(size_t & phred){
   return std::pow(10, -((double)phred/10.0));
 }
 
-std::vector<double> phred_to_double_converter(){
-  std::vector<double> res;
-  for (int phred=0; phred<=MAX_PHRED; phred++){
-    res.push_back(phred_to_double(phred));
-  }
-  return res;
-}
-
-std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
-
-// tmf: // readpos, prime, strand, refdinucl1, refdinucl2, sampledinucl1,sampledinucl2
 
 const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
   keeplist_map res;

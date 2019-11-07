@@ -5,4 +5,5 @@ nlopt-2.5.0
 v2.5.0.tar.gz
 *.d
 *.o
+a.out
 version.hpp

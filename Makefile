@@ -46,3 +46,8 @@ clean:
 	rm -rf nlopt-2.5.0/
 	rm -rf v2.5.0.tar.gz
 	rm -rf htslib
+
+
+clean_simple:
+	rm -f DamMet
+	rm -f ./*.o ./*.d version.hpp
