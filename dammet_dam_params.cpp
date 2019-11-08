@@ -2,12 +2,11 @@
 
 #include "dammet_dam_params.hpp"
 #include "nlopt.hpp"
+// #include "/home/krishang/Desktop/test2/DamMet/nlopt-2.5.0/install/include/nlopt.h"
 #include <set>
 #include <ctime>
 #include <iomanip> // setprecision
 
-using v_un_ch = std::vector<unsigned char>;
-using ptr_obs = std::vector<std::unique_ptr<Obs>>;
 
 // Returns logl( expl(x)+expl(y) )
 inline double oplusnatl(const double & x, const double & y ){
@@ -56,8 +55,6 @@ std::vector<double> phred_to_double_converter(){
 }
 
 std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
-
-
 
 
 const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
@@ -467,9 +464,6 @@ void add_aligned_data(general_settings &settings,
                       size_t & rg_idx,
                       size_t & ncycles,
                       size_t & exclude_CnonCpG) {
-      const unint &_se, // seq error 1-40
-      const unint &_me, // mapping error 1-40
-      const unint &_rg  // read group idx 1-x
 
   unint dist_5p, dist_3p;
   unint pos, prime, bc;
@@ -500,10 +494,10 @@ void add_aligned_data(general_settings &settings,
       bc = get_bc(d.t_seq[i], 2, 0);
       if(no_ref_cpg(d.t_ref[i-1], d.t_ref[i])){
         if ((d.t_ref[i] == 2) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
-          nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
+          nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
         }
       } else {
-        cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
+        cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
       }
       tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i-1], d.t_ref[i], d.t_seq[i-1], d.t_seq[i])]++;
     }
@@ -526,10 +520,10 @@ void add_aligned_data(general_settings &settings,
         bc = get_bc(d.t_seq[i], 1, 3);
         if(no_ref_cpg(d.t_ref[i], d.t_ref[i+1])){
           if ((d.t_ref[i] == 1) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
-            nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
+            nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
           }
         } else {
-          cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ, rg_idx));
+          cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
         }
         tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i], d.t_ref[i+1], d.t_seq[i], d.t_seq[i+1])]++;
       }
@@ -579,91 +573,66 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
   double map_and_prior;
   size_t idx_param_meth, idx_param_unmeth;
   per_site * p_per_site;
-  for (size_t site=0; site<d->cpg_idx->size(); site++){
-    // http://tytel.org/blog/2015/01/19/unexpected-optimization-00/
-    // p_per_site = &((*d->data)[site]);
-    p_per_site = &d->data->at(site);
-    // if((*d->cpg_idx)[site].size()==0){
-    //   continue;
-    // }
-
-    // if we find 2 or more C->t og g->A that cannot be explained by deaminations, the site will be excluded for deaminations estimates.
-    // 2 of these observations are equal to ( seqerror/3 )^2 ~ a small number, if and only if the site does not carry an alternative allele.
-    if(p_per_site->exclude_for_deam){
-      // FIXME this should be written to a file for traceability.
-      // std::cerr << d->iteration << " " << p_per_site->position << '\n';
+  for (auto & p: d->cpg_data){
+    if (p->se < 30)
       continue;
-    }
 
-    for(const auto & i : d->cpg_idx->at(site)){
-    // for(const auto & i : (*d->cpg_idx)[site]){
-      if(p_per_site->seqerrors[i]>PHRED_TO_PROB_CONVERTER[30]){
-        continue;
+    seqerror = PHRED_TO_PROB_CONVERTER[p->se];
+    maperror = PHRED_TO_PROB_CONVERTER[p->me];
+
+    idx_param_meth = get_param_idx(d->settings->max_pos_to_end, METHSTATE, p->rp, p->pr);
+    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
+    deamin_methylated = x[idx_param_meth];
+    deamin_unmethylated = x[idx_param_unmeth];
+    map_and_prior =  maperror * BASE_FREQ_FLAT_PRIOR;
+    res = 0;
+    if (p->bc == 0) {
+      // C->C -> (1-e) * (1-d) + (d * e/3)
+      M = (1 - seqerror) * (1 - deamin_methylated) + (deamin_methylated * seqerror / 3.0);
+      noM = (1 - seqerror) * (1 - deamin_unmethylated) + (deamin_unmethylated * seqerror / 3.0);
+      res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM) + map_and_prior;
+
+      if (!grad.empty()) {
+        grad[idx_param_meth] += (d->settings->M*(1.0-maperror)*( 4.0*seqerror / 3.0 - 1) + map_and_prior) / res;
+        grad[idx_param_unmeth] += ((1-d->settings->M) * (1.0-maperror)*( 4.0*seqerror / 3.0 - 1) + map_and_prior) /res;
       }
-      idx_param_meth = get_param_idx(d->settings->max_pos_to_end, METHSTATE, p_per_site->pos_to_end[i], p_per_site->prime[i]);
-      idx_param_unmeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p_per_site->pos_to_end[i], p_per_site->prime[i]);
-      res=0;
-      seqerror = p_per_site->seqerrors[i];
-      maperror = p_per_site->maperrors[i];
-      deamin_methylated = x[idx_param_meth];
-      deamin_unmethylated = x[idx_param_unmeth];
-      map_and_prior =  maperror * BASE_FREQ_FLAT_PRIOR;
 
-      if (p_per_site->base_compos[i] == 0) {
-        // C->C -> (1-e) * (1-d) + (d * e/3)
-        M = (1 - seqerror) * (1 - deamin_methylated) + (deamin_methylated * seqerror / 3.0);
-        noM = (1 - seqerror) * (1 - deamin_unmethylated) + (deamin_unmethylated * seqerror / 3.0);
-        res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM) + map_and_prior;
-
-        if (!grad.empty()) {
-          grad[idx_param_meth] += (d->settings->M*(1.0-maperror)*( 4.0*seqerror / 3.0 - 1) + map_and_prior) / res;
-          grad[idx_param_unmeth] += ((1-d->settings->M) * (1.0-maperror)*( 4.0*seqerror / 3.0 - 1) + map_and_prior) /res;
-        }
-
-      } else if (p_per_site->base_compos[i] == 1) {
-        // C->T -> (1-e) * d + ((1-d) * e/3)
-        M = (1 - seqerror) * (deamin_methylated) + ((1-deamin_methylated) * seqerror / 3.0);
-        noM = (1 - seqerror) * deamin_unmethylated + ((1-deamin_unmethylated) * seqerror / 3.0);
-        res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM)  + map_and_prior;
-        if (!grad.empty()) {
-          grad[idx_param_meth] += (d->settings->M * (1.0-maperror)*( -4.0*seqerror / 3.0 + 1) + map_and_prior) / res;
-          grad[idx_param_unmeth] += ((1-d->settings->M) * (1.0-maperror)*( -4.0*seqerror / 3.0 + 1) + map_and_prior) / res;
-        }
-      } else {
-        // C->[AG] -> (d)*e/3.0 + (1-d) * e/3.0
-        M = (seqerror / 3) * deamin_methylated + ((1 - deamin_methylated) * seqerror / 3.0);
-        noM = (seqerror / 3) * deamin_unmethylated + ((1 - deamin_unmethylated) * seqerror / 3.0);
-        res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM)  + map_and_prior;
-
-        // diff is zero
-        // grad[idx_param_unmeth] += 0;
-        // grad[idx_param_meth] += 0;
-
+    } else if (p->bc == 1) {
+      // C->T -> (1-e) * d + ((1-d) * e/3)
+      M = (1 - seqerror) * (deamin_methylated) + ((1-deamin_methylated) * seqerror / 3.0);
+      noM = (1 - seqerror) * deamin_unmethylated + ((1-deamin_unmethylated) * seqerror / 3.0);
+      res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM)  + map_and_prior;
+      if (!grad.empty()) {
+        grad[idx_param_meth] += (d->settings->M * (1.0-maperror)*( -4.0*seqerror / 3.0 + 1) + map_and_prior) / res;
+        grad[idx_param_unmeth] += ((1-d->settings->M) * (1.0-maperror)*( -4.0*seqerror / 3.0 + 1) + map_and_prior) / res;
       }
-      ll += std::log(res);
+    } else {
+      // C->[AG] -> (d)*e/3.0 + (1-d) * e/3.0
+      M = (seqerror / 3) * deamin_methylated + ((1 - deamin_methylated) * seqerror / 3.0);
+      noM = (seqerror / 3) * deamin_unmethylated + ((1 - deamin_unmethylated) * seqerror / 3.0);
+      res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM)  + map_and_prior;
+
+      // diff is zero
+      // grad[idx_param_unmeth] += 0;
+      // grad[idx_param_meth] += 0;
 
     }
+    ll += std::log(res);
   }
 
-  // if (!grad.empty()) {
-  //   std::cerr << "before" << '\n';
-  //   print_single_array_parameters(d->settings.max_pos_to_end, grad, std::cerr);
-  //   std::cerr << "after" << '\n';
-  // }
-  for(const auto & i : (*d->nocpg_idx)){
-    if(d->nocpg_data->maperrors[i]>PHRED_TO_PROB_CONVERTER[30]){
+  for (auto & p: d->nocpg_data){
+    if (p->se < 30)
       continue;
-    }
 
-    idx_param_unmeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, d->nocpg_data->pos_to_end[i], d->nocpg_data->prime[i]);
-    // std::cerr << "got tis far " << d->nocpg_data->depth << " " << d->settings->max_pos_to_end << " " << i << " " << d->nocpg_data->pos_to_end[i]  << " " << d->nocpg_data->prime[i] << " " << idx_param_unmeth<< " " << x.size() <<  " " << d->nocpg_data->seqerrors.size() << " " << d->nocpg_data->maperrors.size() << '\n';
-    res = 0;
-    seqerror = d->nocpg_data->seqerrors[i];
-    maperror = d->nocpg_data->maperrors[i];
+
+    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
+    seqerror = PHRED_TO_PROB_CONVERTER[p->se];
+    maperror = PHRED_TO_PROB_CONVERTER[p->me];
+    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
     deamin_unmethylated = x[idx_param_unmeth];
     map_and_prior =  maperror * BASE_FREQ_FLAT_PRIOR;
 
-    if (d->nocpg_data->base_compos[i] == 0) {
+    if (d->bc == 0) {
       // C->C -> (1-e) * (1-d) + (d * e/3)
       noM = (1 - seqerror) * (1 - deamin_unmethylated) + (deamin_unmethylated * seqerror / 3.0);
       res = (1-maperror) * noM  + map_and_prior;
@@ -672,9 +641,9 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
         grad[idx_param_unmeth] += ((1-maperror) * ( 4.0*seqerror / 3.0 - 1) + map_and_prior) / res;
       }
 
-    } else if (d->nocpg_data->base_compos[i] == 1) {
+    } else if (d->bc == 1) {
       // C->T -> (1-e) * d + ((1-d) * e/3)
-      noM = (1 - seqerror) * deamin_unmethylated + ((1-deamin_unmethylated) * seqerror / 3.0);
+      noM = (1-seqerror) * deamin_unmethylated + ((1-deamin_unmethylated) * seqerror / 3.0);
       res = (1-maperror) * noM  + map_and_prior;
       if (!grad.empty()) {
         grad[idx_param_unmeth] += ((1-maperror) * ( -4.0*seqerror / 3.0 + 1) + map_and_prior )/ res;
@@ -748,27 +717,7 @@ void run_deamrates_optim(general_settings & settings,
   checkfilehandle(f, filename);
   std::vector<double> param = single_array_parameters(settings.max_pos_to_end, tmf);
 
-  std::vector<size_t> nocpg_idx;
-  nocpg_idx.reserve(cov_rg.nocpg[rg_idx]);
-  for (size_t i=0; i<nocpg_data.depth; i++){
-    if(nocpg_data.rgs[i] == rg_idx && nocpg_data.readlengths[i]>=settings.minreadlength_deam){
-      nocpg_idx.push_back(i);
-    }
-  }
-
-  std::vector< std::vector< size_t > > cpg_idx;
-  cpg_idx.resize(data.size());
-  for (size_t site=0; site<data.size(); site++){
-    for(size_t i=0; i<data[site].depth; i++){
-      if(data[site].rgs[i]==rg_idx && data[site].readlengths[i]>=settings.minreadlength_deam){
-        cpg_idx[site].push_back(i);
-      }
-    }
-  }
-
-
-  // deamrates_void void_stuff(settings, &data, &nocpg_data, rg_idx);
-  deamrates_void void_stuff(&settings, &data, &nocpg_data, rg_idx, &cpg_idx, &nocpg_idx);
+  deamrates_void void_stuff(&settings, cpg_data, nocpg_data, rg_idx);
   // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
   std::vector<double> t; // just a dummy
   f << "##Initial (param are freq from tallycounts file) llh: " << objective_func_deamrates(param, t, &void_stuff) << std::endl;
@@ -1695,7 +1644,7 @@ void est_dam_only(general_settings & settings) {
   // do not included CnonCpGs if deamrates are already provided.
   std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
 
-  ptr_obs cpg_data, nocpg_data;
+  std::vector<ptr_obs> cpg_data, nocpg_data;
   // std::vector<per_site> data;
   // data.resize(cpg_map.size());
   //size_t nocpg_to_include = 1e6;
@@ -1774,7 +1723,13 @@ void est_dam_only(general_settings & settings) {
    }
 
    d = align_read(rd, ref);
-   add_aligned_data(settings, d, cpg_data, nocpg_data, tm[rgname_idx], cov_rg, rgname_idx, cycles[rgname_idx], exclude_CnonCpGs[rgname_idx]);
+   add_aligned_data(settings, d,
+                    cpg_data[rgname_idx],
+                    nocpg_data[rgname_idx],
+                    tm[rgname_idx],
+                    cov_rg, rgname_idx,
+                    cycles[rgname_idx],
+                    exclude_CnonCpGs[rgname_idx]);
   }
   time(&end_time_load_data);
   settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
@@ -1814,7 +1769,7 @@ void est_dam_only(general_settings & settings) {
     }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
       print_log(settings);
-      run_deamrates_optim(settings, tmf[i], cpg_data, nocpg_data, rgs[i], i, cov_rg);
+      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs[i], i, cov_rg);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);

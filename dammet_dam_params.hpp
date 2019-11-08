@@ -14,14 +14,18 @@
 #include <vector>
 
 #include "zlib.h"
-#include "htslib/faidx.h"
-#include "htslib/hts.h"
-#include "htslib/sam.h"
+#include "htslib/htslib/faidx.h"
+#include "htslib/htslib/hts.h"
+#include "htslib/htslib/sam.h"
 
 #include "load_fasta.hpp"
 #include "nucl_conv.hpp"
 #include "myargparser.hpp"
 #include "constants.hpp"
+
+
+using v_un_ch = std::vector<unsigned char>;
+
 
 /// STRUCTS
 struct my_cov_rg {
@@ -101,27 +105,6 @@ struct per_mle_run {
   }
 } ;
 
-struct deamrates_void {
-  general_settings * settings;
-  std::vector<per_site> *data;
-  per_site_nocpg *nocpg_data;
-  size_t iteration, rg_idx;
-  std::vector<std::vector<size_t>> *cpg_idx;
-  std::vector<size_t> *nocpg_idx;
-  deamrates_void(general_settings * s, std::vector<per_site> *d,
-                 per_site_nocpg *nocpg_d, size_t &r_idx,
-                 std::vector<std::vector<size_t>> *c_idx,
-                 std::vector<size_t> *nc_idx) {
-    settings = s;
-    data = d;
-    nocpg_data = nocpg_d;
-    rg_idx = r_idx;
-    cpg_idx = c_idx;
-    nocpg_idx = nc_idx;
-    iteration = 0;
-  }
-};
-
 
 struct alignment_data {
   alignment_data () {
@@ -144,13 +127,12 @@ struct Obs {
       const unint &_rl,  // read length 0,1
       const unint &_bc, // base composition 0,1,2
       const unint &_se, // seq error 1-40
-      const unint &_me, // mapping error 1-40
-      const unint &_rg  // read group idx 1-x
+      const unint &_me // mapping error 1-40
       ):
     pr(_pr), st(_st),
     rp(_rp), rl(_rl),
     bc(_bc), se(_se),
-    me(_me), rg(_rg) {}
+    me(_me) {}
 
   unint pr : 1;  // 0..1  (1 bits)
   unint st : 1;  // 0..1  (1 bits)
@@ -159,8 +141,10 @@ struct Obs {
   unint bc : 2;  // 0,1,2 (2 bits) 3
   unint se : 6;  // 0-40  (6 bits)
   unint me : 6;  // 0-40  (6 bits)
-  unint rg : 6;  // 0-40  (6 bits) 18
 };
+
+using ptr_obs = std::vector<std::unique_ptr<Obs>>;
+
 
 struct Site {
   Site(const unint &_chrom,
@@ -169,10 +153,25 @@ struct Site {
     chrom(_chrom), pos(_pos), ref(_ref){
     // data.reserve(20);
   }
-  int pos, depth=0;
+  int chrom, pos, depth=0;
   unint ref: 3;  // 0-5 A,C,G,T,N,Del
   // unint cpg: 1;
   std::vector<std::unique_ptr<Obs>> data;
+};
+
+
+struct deamrates_void {
+  general_settings * settings;
+  ptr_obs cpg_data, nocpg_data;
+  size_t iteration=0, rg_idx;
+  //std::vector<std::vector<size_t>> *cpg_idx;
+  //std::vector<size_t> *nocpg_idx;
+  deamrates_void(general_settings * _settings,
+                 ptr_obs &_cpg_data,
+                 ptr_obs &_nocpg_data,
+                 size_t &_rg_idx):
+    settings(_settings), cpg_data(_cpg_data),
+    nocpg_data(_nocpg_data), rg_idx(_rg_idx){}
 };
 
 
