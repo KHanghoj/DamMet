@@ -1,6 +1,7 @@
 #include <iostream> // stdout/stdin/stderr
 #include <memory>
 #include <vector>
+
 struct test{
   test(const int & _a,
        std::unique_ptr<int> & _b,
@@ -21,7 +22,7 @@ struct test2{
   int a,b;
 };
 
-void test3(std::vector<std::unique_ptr<test2>> & a){
+void parse_vec(std::vector<std::unique_ptr<test2>> & a){
   std::cerr << "test" << '\n';
   for (auto&x: a){
     std::cerr << x->a << '\n';
@@ -35,13 +36,44 @@ struct test4{
   std::vector<std::unique_ptr<test2>> * c;
 };
 
-void test5(test4 * d){
-  std::cerr << "test5" << '\n';
+struct test5{
+  test5(std::vector<std::shared_ptr<test2>> & _c){
+    c=_c;
+    std::cerr << c[0].use_count() << '\n';
+  }
+  std::vector<std::shared_ptr<test2>> c;
+};
+
+void parse_vec2(test4 * d){
+  std::cerr << "parse_vec2" << '\n';
   for (auto &x: *(d->c)){
     std::cerr << x->a << '\n';
   }
-
 }
+
+void parse_vec3(test5 & d){
+  std::cerr << "parse_vec3" << '\n';
+  for (auto &x: d.c){
+    std::cerr << x->a << '\n';
+  }
+}
+
+struct deamrates{
+  deamrates(std::vector<std::unique_ptr<test2>> & _d){
+    d = std::move(_d);
+  }
+  std::vector<std::unique_ptr<test2>> d;
+};
+
+void make_a_move(std::vector<std::unique_ptr<test2>> & d){
+  deamrates a(d);
+
+  std::cerr << a.d[0]->a << '\n';
+  std::cerr << "dingdong" << '\n';
+  std::cerr << a.d[0]->b << '\n';
+  std::cerr << d[0]->a << '\n';
+}
+
 
 int main(){
 
@@ -77,10 +109,26 @@ int main(){
     std::cerr << x->b << '\n';
   }
 
-  test3(v2);
-  test3(v2);
+  parse_vec(v2);
+  //parse_vec(v2);
 
   test4 be(&v2);
-  test5(&be);
+  parse_vec2(&be);
 
+
+  std::vector<std::shared_ptr<test2>> v3;
+  v3.emplace_back(std::make_shared<test2>(1000, 10));
+  v3.emplace_back(std::make_shared<test2>(10000, 100));
+  std::cerr << '\n';
+
+  std::cerr << v3[0].use_count() << '\n';
+
+  if(1){
+    test5 b2(v3);
+    parse_vec3(b2);
+  }
+  std::cerr << v3[0].use_count() << '\n';
+
+
+  make_a_move(v2);
 }

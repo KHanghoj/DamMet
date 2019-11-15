@@ -101,7 +101,7 @@ const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
 //   return res;
 // }
 
-const v_un_ch get_c_and_cpg_chrom(const char * ref, const size_t & seq_len){
+const v_un_ch get_cpg_chrom(const char * ref, const size_t & seq_len){
   v_un_ch res(seq_len, 0);
   for (size_t i=0; i<seq_len-1; i++){
     if ((refToInt[(int)ref[i]] == 1)&&(refToInt[(int)ref[i+1]] == 2)){
@@ -245,14 +245,7 @@ std::vector<double> read_count_file(general_settings & settings, std::string & r
 };
 
 
-void get_bases(const alignment_data & d, const int & b1, const int & b2, int & r_base1, int & r_base2, int & s_base1, int & s_base2){
-  r_base1 = d.t_ref[b1];
-  r_base2 = d.t_ref[b2];
-  s_base1 = d.t_seq[b1];
-  s_base2 = d.t_seq[b2];
-}
-
-void get_pos_and_prime(general_settings & settings, const size_t & dist_3p, const size_t & dist_5p, size_t & pos, size_t & prime){
+void get_pos_and_prime(general_settings & settings, const size_t & dist_3p, const size_t & dist_5p, unint & pos, unint & prime){
     if ((dist_3p > settings.max_pos_to_end) &&
         (dist_5p > settings.max_pos_to_end)) {
       pos = settings.max_pos_to_end + 1;
@@ -422,20 +415,20 @@ alignment_data align_read(bam1_t * rd, char * ref){
 
 bool no_ref_cpg(const int & r_base1, const int & r_base2){
   return(r_base1!=1 || r_base2!=2);
-}
+};
 
 bool cpg(const int & base1, const int & base2){
   return(base1==1 && base2==2);
 }
 
-bool check_base_quality(general_settings &settings,
-                   const alignment_data &d,
-                        size_t &i_l, size_t &i_r){
+bool check_base_quality(const general_settings &settings,
+                        const alignment_data &d,
+                        const size_t &i_l, const size_t &i_r){
   bool trash=false;
   if (d.t_seq[i_l] >=4 || d.t_seq[i_r] >= 4 || // is read N
       d.t_ref[i_l] >=4 || d.t_ref[i_r] >= 4 || // is reference N
-      d.t_qs[i_l] <settings.minbaseQ | d.t_seq[i_r] < settings.minbaseQ || // base quality
-      (i_l>0 && base_is_indel(d.t_ref[i_l-1], d.t_seq[i_l-1])) // left is indel
+      d.t_qs[i_l] <settings.minbaseQ || d.t_qs[i_r] < settings.minbaseQ || // base quality
+      (i_l>0 && base_is_indel(d.t_ref[i_l-1], d.t_seq[i_l-1])) || // left is indel
       (i_r+1 <= d.t_seq.size()-1 && base_is_indel(d.t_ref[i_r+1], d.t_seq[i_r+1])) // right is indel
       ) {
     trash = true;
@@ -443,9 +436,9 @@ bool check_base_quality(general_settings &settings,
   return trash;
 }
 
-unint get_bc(const int & obs, // no error
-             const int & no_ch, // deamin or mut or error
-             const int &ch){ // error (could also be deamin then error)
+unint get_bc(const int & obs, // obs
+             const int & no_ch, // ref
+             const int &ch){ //  deamin/mut/error
   if(obs == no_ch){
     return 0;
   } else if (obs == ch){
@@ -457,8 +450,8 @@ unint get_bc(const int & obs, // no error
 
 void add_aligned_data(general_settings &settings,
                       const alignment_data &d,
-                      ptr_obs &cpg_data,
-                      ptr_obs &nocpg_data,
+                      uni_ptr_obs &cpg_data,
+                      uni_ptr_obs &nocpg_data,
                       std::vector<int> &tm,
                       my_cov_rg & cov_rg,
                       size_t & rg_idx,
@@ -468,65 +461,82 @@ void add_aligned_data(general_settings &settings,
   unint dist_5p, dist_3p;
   unint pos, prime, bc;
   unint rl = (d.n_nucleotides == ncycles);
-  size_t data_idx=0;
   double seqerror = 0;
-  //double maperror = PHRED_TO_PROB_CONVERTER[d.mapQ];
+  size_t boi; // base of interest
+  for (size_t i = 0; i < d.t_seq.size()-1; i++){
 
-  bool include_in_cpg = false;
-  bool include_in_tally = false;
-
-  if (d.strand){ // true for negative strand
-    for (size_t i = d.t_seq.size()-1; i>0 ; i--){
-      if(check_base_quality(settings, d, i-1, i))
+    if (d.strand){ // true for negative strand
+      boi = d.t_seq.size()-i-1; // closest to 5 prime
+      if(check_base_quality(settings, d, boi-1, boi))
         continue;
 
-      if(d.t_ref[i] != 2)
+      if(d.t_ref[boi] != 2)
         continue;
 
-      dist_5p = d.t_isop[i];
-      dist_3p = d.t_posi[i];
+      dist_5p = d.t_isop[boi];
+      dist_3p = d.t_posi[boi];
       get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
 
       // if read == number of cycles. use the postions relative to the 5 prime.
-      if (prime==1 && d.n_nucleotides==ncycles)
+      if (prime==1 && rl)
         get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+      bc = get_bc(d.t_seq[boi], 2, 0);
 
-      bc = get_bc(d.t_seq[i], 2, 0);
-      if(no_ref_cpg(d.t_ref[i-1], d.t_ref[i])){
-        if ((d.t_ref[i] == 2) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
-          nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
-        }
-      } else {
-        cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
+      if(no_ref_cpg(d.t_ref[boi-1], d.t_ref[boi]) &&
+         cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx]){
+        nocpg_data.emplace_back(std::make_unique<Obs>(prime,
+                                                      d.strand,
+                                                      pos,
+                                                      rl,
+                                                      bc,
+                                                      d.t_qs[boi],
+                                                      d.mapQ));
+        cov_rg.nocpg[rg_idx]++;
       }
-      tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i-1], d.t_ref[i], d.t_seq[i-1], d.t_seq[i])]++;
-    }
-  } else {
-    for (size_t i = 0; i<d.t_seq.size()-1; i++){
-      if(check_base_quality(settings, d, i, i+1))
+
+      if(cpg(d.t_ref[boi-1], d.t_ref[boi])){
+        cpg_data.emplace_back(std::make_unique<Obs>(prime,
+                                                    d.strand,
+                                                    pos,
+                                                    rl,
+                                                    bc,
+                                                    d.t_qs[boi],
+                                                    d.mapQ));
+        cov_rg.cpg[rg_idx]++;
+      }
+      tm[get_idx_tm(pos, prime, d.strand, d.t_ref[boi-1], d.t_ref[boi], d.t_seq[boi-1], d.t_seq[boi])]++;
+
+    } else {
+      boi = i; // closest to 5 prime
+      if(check_base_quality(settings, d, boi, boi+1))
         continue;
 
-        if(d.t_ref[i] != 1)
-          continue;
+      if(d.t_ref[boi] != 1)
+        continue;
 
-        dist_5p = d.t_isop[i];
-        dist_3p = d.t_posi[i];
-        get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
+      dist_5p = d.t_posi[boi];
+      dist_3p = d.t_isop[boi];
+      get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
 
-        // if read == number of cycles. use the postions relative to the 5 prime.
-        if (prime==1 && d.n_nucleotides==ncycles)
-          get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+      // if read == number of cycles. use the postions relative to the 5 prime.
+      if (prime==1 && rl)
+        get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+      bc = get_bc(d.t_seq[boi], 1, 3);
 
-        bc = get_bc(d.t_seq[i], 1, 3);
-        if(no_ref_cpg(d.t_ref[i], d.t_ref[i+1])){
-          if ((d.t_ref[i] == 1) && (cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx])){
-            nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
-          }
-        } else {
-          cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[i], d.mapQ));
-        }
-        tm[get_idx_tm(pos, prime, d.strand, d.t_ref[i], d.t_ref[i+1], d.t_seq[i], d.t_seq[i+1])]++;
+      if(no_ref_cpg(d.t_ref[boi], d.t_ref[boi+1]) && cov_rg.nocpg[rg_idx] < cov_rg.cpg[rg_idx]){
+          // adding data to nocpg
+          nocpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[boi], d.mapQ));
+          cov_rg.nocpg[rg_idx]++;
       }
+
+      if(cpg(d.t_ref[boi], d.t_ref[boi+1])){
+        // adding data to cpg
+        cpg_data.emplace_back(std::make_unique<Obs>(prime, d.strand, pos, rl, bc, d.t_qs[boi], d.mapQ));
+        cov_rg.cpg[rg_idx]++;
+      }
+
+      tm[get_idx_tm(pos, prime, d.strand, d.t_ref[boi], d.t_ref[boi+1], d.t_seq[boi], d.t_seq[boi+1])]++;
+    }
   }
 }
 
@@ -536,7 +546,7 @@ size_t get_param_idx(const size_t & max_pos_to_end, const size_t & meth, const s
 
 template <class T>
 void print_single_array_parameters(const size_t & max_pos_to_end, std::vector<double> & param, T & out){
-    for (size_t i=0; i<METHSTATES;i++){
+  for (size_t i=0; i<METHSTATES;i++){
     for (size_t p=0; p<max_pos_to_end+2;p++){
       for (size_t pr=0; pr<PRIMES;pr++){
         if((pr==1 && p==max_pos_to_end+1) || (pr==1 && p==0)){
@@ -572,16 +582,13 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
   double noM, M;
   double map_and_prior;
   size_t idx_param_meth, idx_param_unmeth;
-  per_site * p_per_site;
   for (auto & p: d->cpg_data){
-    if (p->se < 30)
-      continue;
 
     seqerror = PHRED_TO_PROB_CONVERTER[p->se];
     maperror = PHRED_TO_PROB_CONVERTER[p->me];
 
     idx_param_meth = get_param_idx(d->settings->max_pos_to_end, METHSTATE, p->rp, p->pr);
-    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
+    idx_param_unmeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
     deamin_methylated = x[idx_param_meth];
     deamin_unmethylated = x[idx_param_unmeth];
     map_and_prior =  maperror * BASE_FREQ_FLAT_PRIOR;
@@ -621,18 +628,14 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
   }
 
   for (auto & p: d->nocpg_data){
-    if (p->se < 30)
-      continue;
 
-
-    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
     seqerror = PHRED_TO_PROB_CONVERTER[p->se];
     maperror = PHRED_TO_PROB_CONVERTER[p->me];
-    idx_param_ummeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
+    idx_param_unmeth = get_param_idx(d->settings->max_pos_to_end, UNMETHSTATE, p->rp, p->pr);
     deamin_unmethylated = x[idx_param_unmeth];
     map_and_prior =  maperror * BASE_FREQ_FLAT_PRIOR;
 
-    if (d->bc == 0) {
+   if (p->bc == 0) {
       // C->C -> (1-e) * (1-d) + (d * e/3)
       noM = (1 - seqerror) * (1 - deamin_unmethylated) + (deamin_unmethylated * seqerror / 3.0);
       res = (1-maperror) * noM  + map_and_prior;
@@ -641,7 +644,7 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
         grad[idx_param_unmeth] += ((1-maperror) * ( 4.0*seqerror / 3.0 - 1) + map_and_prior) / res;
       }
 
-    } else if (d->bc == 1) {
+    } else if (p->bc == 1) {
       // C->T -> (1-e) * d + ((1-d) * e/3)
       noM = (1-seqerror) * deamin_unmethylated + ((1-deamin_unmethylated) * seqerror / 3.0);
       res = (1-maperror) * noM  + map_and_prior;
@@ -666,7 +669,7 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
   }
 
   // if (!grad.empty()) {
-  //   print_single_array_parameters(d->settings->max_pos_to_end, grad, std::cerr);
+  //   print_single_array_parameters(p->settings->max_pos_to_end, grad, std::cerr);
   // }
   // return -ll;
   return ll;
@@ -705,8 +708,8 @@ std::vector<double> single_array_parameters(const size_t & max_pos_to_end, const
 /// got this far
 void run_deamrates_optim(general_settings & settings,
                          const std::vector<double> & tmf,
-                         ptr_obs &cpg_data,
-                         ptr_obs &nocpg_data,
+                         uni_ptr_obs &cpg_data,
+                         uni_ptr_obs &nocpg_data,
                          std::string & rg,
                          size_t & rg_idx,
                          my_cov_rg & cov_rg){
@@ -715,7 +718,9 @@ void run_deamrates_optim(general_settings & settings,
   std::string filename = settings.outbase + "." + rg + ".deamrates";
   std::ofstream f (filename.c_str());
   checkfilehandle(f, filename);
-  std::vector<double> param = single_array_parameters(settings.max_pos_to_end, tmf);
+  std::vector<double> param2 = single_array_parameters(settings.max_pos_to_end, tmf);
+
+  std::vector<double> param(param2.size(), 0.5);
 
   deamrates_void void_stuff(&settings, cpg_data, nocpg_data, rg_idx);
   // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
@@ -1591,10 +1596,10 @@ void est_dam_only(general_settings & settings) {
   } else {
     rg_split = false;
     rgs.push_back(ALL_RG);
-    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG
+    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
     if(settings.cycles!=std::numeric_limits<size_t>::max()){
       cycles.push_back(settings.cycles);
-      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles)
+      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
     } else {
       cycles.push_back(std::numeric_limits<size_t>::max());
     }
@@ -1637,14 +1642,16 @@ void est_dam_only(general_settings & settings) {
 
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
-  const v_un_ch cpg_bool = get_c_and_cpg_chrom(ref, seq_len)
+  const v_un_ch cpg_bool = get_cpg_chrom(ref, seq_len);
   settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + settings.chrom + '\n';
   print_log(settings);
 
   // do not included CnonCpGs if deamrates are already provided.
   std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
 
-  std::vector<ptr_obs> cpg_data, nocpg_data;
+  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
+  cpg_data.resize(rgs.size());
+  nocpg_data.resize(rgs.size());
   // std::vector<per_site> data;
   // data.resize(cpg_map.size());
   //size_t nocpg_to_include = 1e6;
@@ -1721,7 +1728,6 @@ void est_dam_only(general_settings & settings) {
      rgname=ALL_RG;
      rgname_idx=ALL_DEAMMETH_RG_IDX;
    }
-
    d = align_read(rd, ref);
    add_aligned_data(settings, d,
                     cpg_data[rgname_idx],
@@ -1731,6 +1737,9 @@ void est_dam_only(general_settings & settings) {
                     cycles[rgname_idx],
                     exclude_CnonCpGs[rgname_idx]);
   }
+#if 1
+  std::cerr << "N: " << cpg_data[0].size() << " " << nocpg_data[0].size() << '\n';
+#endif
   time(&end_time_load_data);
   settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
     ". Reads filtered: " + std::to_string(trashed) +
@@ -1757,23 +1766,23 @@ void est_dam_only(general_settings & settings) {
 
   settings.args_stream << std::flush;
   for (size_t i=0; i<rgs.size(); i++){
-    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-      settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
-      print_log(settings);
-      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-      param_deam[i] = load_deamrates_f(settings);
-    } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
-      settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
-      print_log(settings);
-      param_deam[i] = load_deamrates(settings, rgs[i]);
-    }else {
+    // if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+    //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
+    //   print_log(settings);
+    //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+    //   param_deam[i] = load_deamrates_f(settings);
+    // } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
+    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
+    //   print_log(settings);
+    //   param_deam[i] = load_deamrates(settings, rgs[i]);
+    // }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
       print_log(settings);
       run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs[i], i, cov_rg);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);
-    }
+      // }
   }
   std::cerr << "\t-> Cleaning up." << '\n';
   settings.args_stream << std::flush;
@@ -1785,6 +1794,9 @@ void est_dam_only(general_settings & settings) {
   sam_close(in);
 }
 
+int est_dam_and_F(general_settings & settings){
+  return 1;
+}
 
 int main(int argc, char *argv[]) {
   time_t start_time, end_time;

@@ -110,8 +110,8 @@ struct alignment_data {
   alignment_data () {
     t_seq.reserve(100), t_posi.reserve(100), t_isop.reserve(100), t_qs.reserve(100), t_ref.reserve(100), t_positions.reserve(100);
   }
-  size_t strand, mapQ, n_nucleotides;
-  std::vector<size_t> t_seq, t_posi, t_isop, t_qs, t_ref, t_positions;
+  unint strand, mapQ, n_nucleotides;
+  std::vector<unint> t_seq, t_posi, t_isop, t_qs, t_ref, t_positions;
 
 };
 
@@ -132,7 +132,9 @@ struct Obs {
     pr(_pr), st(_st),
     rp(_rp), rl(_rl),
     bc(_bc), se(_se),
-    me(_me) {}
+    me(_me) {
+
+  }
 
   unint pr : 1;  // 0..1  (1 bits)
   unint st : 1;  // 0..1  (1 bits)
@@ -143,7 +145,7 @@ struct Obs {
   unint me : 6;  // 0-40  (6 bits)
 };
 
-using ptr_obs = std::vector<std::unique_ptr<Obs>>;
+using uni_ptr_obs = std::vector<std::unique_ptr<Obs>>;
 
 
 struct Site {
@@ -162,17 +164,36 @@ struct Site {
 
 struct deamrates_void {
   general_settings * settings;
-  ptr_obs cpg_data, nocpg_data;
+  uni_ptr_obs cpg_data, nocpg_data;
   size_t iteration=0, rg_idx;
   //std::vector<std::vector<size_t>> *cpg_idx;
   //std::vector<size_t> *nocpg_idx;
   deamrates_void(general_settings * _settings,
-                 ptr_obs &_cpg_data,
-                 ptr_obs &_nocpg_data,
-                 size_t &_rg_idx):
-    settings(_settings), cpg_data(_cpg_data),
-    nocpg_data(_nocpg_data), rg_idx(_rg_idx){}
+                 uni_ptr_obs &_cpg_data,
+                 uni_ptr_obs &_nocpg_data,
+                 size_t &_rg_idx){
+    settings = _settings;
+    cpg_data = std::move(_cpg_data);
+    nocpg_data = std::move(_nocpg_data);
+    rg_idx = _rg_idx;
+  };
+
 };
+
+
+struct F_void {
+  general_settings * settings;
+  std::vector<pre_calc_per_site> * data;
+  per_mle_run * mle_data;
+  size_t iteration;
+  F_void(general_settings * s, std::vector<pre_calc_per_site> * d, per_mle_run * m){
+    settings = s;
+    data = d;
+    mle_data = m;
+    iteration = 0;
+  }
+};
+
 
 
 // FUNCTIONS
