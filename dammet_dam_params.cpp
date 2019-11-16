@@ -1476,44 +1476,14 @@ void print_d(pre_calc_per_site & d){
   std::cout << std::flush;
 }
 
-void print_help(){
-  std::cerr << "\nDamMet (" << DAMMET_VERSION << ") is a software aimed to estimate methylation maps using HTS sequencing "
-    "data underlying ancient samples. The implemented model follows a two-steps procedure. "
-    "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
-    "rates at both methylated and unmethylated cytosine residues. The second step makes use "
-    "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
-  std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
-    "fasta)\n\t->-c (chromosome of interest)" << '\n';
-  std::cerr << "OPTIONS:" << std::endl;
-  std::cerr << "\t-> BED file (-B): " << std::endl;
-  std::cerr << "\t-> minmapQ (-q): " << std::endl;
-  std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
-  std::cerr << "\t-> MinReadLength (-L): " << std::endl;
-  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
-  std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
-  std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
-  std::cerr << "\t-> Outbase (-O): " << std::endl;
-  std::cerr << "\t-> readFlags (-F): " << std::endl;
-  std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
-  std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
-  std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
-  std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
-  std::cerr << "\t-> Exclude BED (-e): " << std::endl;
-  std::cerr << "\t-> WindowSize (-W): " << std::endl;
-  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
-  exit(EXIT_SUCCESS);
-}
 
-
-void est_dam_only(general_settings & settings) {
-  std::string stream_filename (settings.outbase+".args");
-  settings.args_stream.open(stream_filename.c_str());
-  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
-  settings.args_stream << settings.all_options;
-
-  std::vector<std::pair<size_t, size_t>> bed_coord;
-
-
+void parse_reads_per_chrom(general_settings & settings,
+                           std::string chrom,
+                           std::vector<std::vector<int>> &tm,
+                           std::vector<uni_ptr_obs> &cpg_data,
+                           std::vector<uni_ptr_obs> &nocpg_data,
+                           rgs_info &rgs,
+                           my_cov_rg &cov_rg){
   // open BAM for reading
   samFile *in = sam_open(settings.bam_fn.c_str(), "r");
   if (in == NULL) {
@@ -1540,78 +1510,32 @@ void est_dam_only(general_settings & settings) {
   }
 
 
-  // load read groups
-
-  rgs_info rgs;
-
-  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
-    load_rg_from_file(settings, rgs);
-  } else {
-    rgs.rg_split = false;
-    rgs.rgs.push_back(ALL_RG);
-    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
-    if(settings.cycles!=std::numeric_limits<size_t>::max()){
-      rgs.cycles.push_back(settings.cycles);
-      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
-    } else {
-      rgs.cycles.push_back(std::numeric_limits<size_t>::max());
-    }
-    settings.buffer += '\n';
-    rgs.n = 1;
-  }
-
-  print_log(settings);
-
-  std::vector<std::vector<double>> tmf;
-  tmf.resize(rgs.n);
-  std::vector<std::vector<int>> tm;
-  tm.resize(rgs.n);
-  for (size_t i=0; i<rgs.n; i++){
-    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
-  }
-
-  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
-  cpg_data.resize(rgs.n);
-  nocpg_data.resize(rgs.n);
-
-
-  my_cov_rg cov_rg(rgs.n);
-
-  // open and close bam files inside this function as well. no need to do this out of scope
-  // remember to release the data as well.
-  // use the string split for priors to create chroms
-  // alternative let user pass a file with chromosomes.
-  // for( auto &chrom : chroms){
-  //   parse_reads_per_chrom(settings, chrom, tmf, tm, cpg_data, nocpg_data, rgs, )
-  //     }
-  // go to the correct chromosome
-  // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
-  hts_itr_t *iter = sam_itr_querys(idx, header, settings.chrom.c_str());
+  hts_itr_t *iter = sam_itr_querys(idx, header, chrom.c_str());
 
   // load ref of that chromosome
   faidx_t *fai = ref_init(settings.reference_fn);
 
-  char *ref = fetch_chrom(fai, settings.chrom);
+  char *ref = fetch_chrom(fai, chrom);
 
-  size_t seq_len = faidx_seq_len(fai, settings.chrom.c_str());
+  size_t seq_len = faidx_seq_len(fai, chrom.c_str());
 
   if (!settings.exclude_bed_fn.empty()) {
     settings.buffer += "\t-> Masking genomic BED regions (-e) " + settings.exclude_bed_fn + '\n';
     print_log(settings);
-    filter_ref_bed(settings.chrom, settings.exclude_bed_fn, ref);
+    filter_ref_bed(chrom, settings.exclude_bed_fn, ref);
   }
 
   if (!settings.exclude_sites_fn.empty()) {
     settings.buffer += "\t-> Masking genomic sites sites (-E) " + settings.exclude_sites_fn + '\n';
     print_log(settings);
-    filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
+    filter_ref_sites(chrom, settings.exclude_sites_fn, ref);
   }
 
 
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
   const v_un_ch cpg_bool = get_cpg_chrom(ref, seq_len);
-  settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + settings.chrom + '\n';
+  settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + chrom + '\n';
   print_log(settings);
 
 
@@ -1698,17 +1622,110 @@ void est_dam_only(general_settings & settings) {
   }
   time(&end_time_load_data);
 
-  settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
-    ". Reads filtered: " + std::to_string(trashed) +
+  settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
+    std::to_string(counter)  + ". Reads filtered: " + std::to_string(trashed) +
     ". Reads skipped (nocpg overlap): " + std::to_string(reads_skipped) +
     ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
 
+  print_log(settings);
+  free(ref);
+  hts_itr_destroy(iter);
+  hts_idx_destroy(idx);
+  bam_destroy1(rd);
+  bam_hdr_destroy(header);
+  sam_close(in);
+}
+
+void print_help(){
+  std::cerr << "\nDamMet (" << DAMMET_VERSION << ") is a software aimed to estimate methylation maps using HTS sequencing "
+    "data underlying ancient samples. The implemented model follows a two-steps procedure. "
+    "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
+    "rates at both methylated and unmethylated cytosine residues. The second step makes use "
+    "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
+  std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
+    "fasta)\n\t->-c (chromosome of interest)" << '\n';
+  std::cerr << "OPTIONS:" << std::endl;
+  std::cerr << "\t-> BED file (-B): " << std::endl;
+  std::cerr << "\t-> minmapQ (-q): " << std::endl;
+  std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
+  std::cerr << "\t-> MinReadLength (-L): " << std::endl;
+  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+  std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
+  std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
+  std::cerr << "\t-> Outbase (-O): " << std::endl;
+  std::cerr << "\t-> readFlags (-F): " << std::endl;
+  std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
+  std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
+  std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
+  std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
+  std::cerr << "\t-> Exclude BED (-e): " << std::endl;
+  std::cerr << "\t-> WindowSize (-W): " << std::endl;
+  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+  exit(EXIT_SUCCESS);
+}
+
+
+void est_dam_only(general_settings & settings) {
+  std::string stream_filename (settings.outbase+".args");
+  settings.args_stream.open(stream_filename.c_str());
+  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
+  settings.args_stream << settings.all_options;
+
+  std::vector<std::pair<size_t, size_t>> bed_coord;
+
+
+
+  rgs_info rgs;
+
+  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
+    load_rg_from_file(settings, rgs);
+  } else {
+    rgs.rg_split = false;
+    rgs.rgs.push_back(ALL_RG);
+    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
+    if(settings.cycles!=std::numeric_limits<size_t>::max()){
+      rgs.cycles.push_back(settings.cycles);
+      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
+    } else {
+      rgs.cycles.push_back(std::numeric_limits<size_t>::max());
+    }
+    settings.buffer += '\n';
+    rgs.n = 1;
+  }
 
   print_log(settings);
+
+  std::vector<std::vector<double>> tmf;
+  tmf.resize(rgs.n);
+  std::vector<std::vector<int>> tm;
+  tm.resize(rgs.n);
+  for (size_t i=0; i<rgs.n; i++){
+    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
+  }
+
+  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
+  cpg_data.resize(rgs.n);
+  nocpg_data.resize(rgs.n);
+
+  my_cov_rg cov_rg(rgs.n);
+
+  // open and close bam files inside this function as well. no need to do this out of scope
+  // remember to release the data as well.
+  // use the string split for priors to create chroms
+  // alternative let user pass a file with chromosomes.
+  std::vector<std::string> chroms;
+  chroms.push_back("20");
+  for(auto & chrom : chroms){
+    parse_reads_per_chrom(settings, chrom, tm,
+                          cpg_data, nocpg_data,
+                          rgs, cov_rg);
+  }
+  // go to the correct chromosome
+  // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
+
   for (size_t i=0; i<rgs.n; i++){
     settings.buffer += "\t-> Total_Observations RG: "+ rgs.rgs[i] +
-      " CpG/cnonCpG: " + std::to_string(cov_rg.cpg[i]) + " " + std::to_string(cov_rg.nocpg[i]) +
-      " CpGcov: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) + '\n';
+      " CpG/cnonCpG: " + std::to_string(cov_rg.cpg[i]) + " " + std::to_string(cov_rg.nocpg[i]) + '\n';
     print_log(settings);
   }
 
@@ -1737,7 +1754,7 @@ void est_dam_only(general_settings & settings) {
     // }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
       print_log(settings);
-#if 1
+#if 0
       print_data(cpg_data[i], nocpg_data[i]);
 #endif
       run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs.rgs[i]);
@@ -1748,12 +1765,6 @@ void est_dam_only(general_settings & settings) {
   }
   std::cerr << "\t-> Cleaning up." << '\n';
   settings.args_stream << std::flush;
-  free(ref);
-  hts_itr_destroy(iter);
-  hts_idx_destroy(idx);
-  bam_destroy1(rd);
-  bam_hdr_destroy(header);
-  sam_close(in);
 }
 
 int est_dam_and_F(general_settings & settings){
