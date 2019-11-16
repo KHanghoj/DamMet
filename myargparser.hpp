@@ -1,14 +1,26 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <limits>
 #include <fstream>
+#include <cstdlib>
+#include <iostream>
+#include <unistd.h>
+#include <sys/stat.h> // mkdir
+#include <sstream> //stringstream
+
+// #include "file_handling.hpp"
+
+bool check_file_exists(std::string filename);
+std::vector<std::string> parse_chrom_file(std::string & filename);
 
 struct general_settings{
   std::ofstream args_stream;
   std::string buffer;
-  std::string bam_fn, reference_fn, chrom;
+  std::string bam_fn, reference_fn, chrom_temp;
   std::string exclude_sites_fn, exclude_bed_fn, all_options, outbase, deamrates_filename;
   std::string readgroups_f, bed_f, priors_str;
+  std::vector<std::string> chrom;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;

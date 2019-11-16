@@ -73,3 +73,24 @@ void filter_ref_bed(const std::string & selected_chrom, std::string & filename, 
   }
   f.close();
 }
+
+
+
+
+// funcs for args parsing
+std::vector<std::string> parse_chrom_file(std::string & filename){
+  std::vector<std::string> res;
+  std::ifstream f (filename.c_str());
+  checkfilehandle<std::ifstream>(f, filename);
+  if(f.is_open()){
+    std::string row, chrom;
+    std::stringstream ss;
+    while(getline(f, row)){
+      ss.str(row);
+      ss >> chrom;
+      res.push_back(chrom);
+      ss.clear();
+    }
+  }
+  return res;
+}

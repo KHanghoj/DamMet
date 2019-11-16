@@ -1034,307 +1034,307 @@ double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_
 }
 
 
-void run_mle(general_settings & settings,
-             std::vector<pre_calc_per_site> & pre_calc_data) {
-  std::string filename = settings.outbase + ".F";
-  std::ofstream f (filename.c_str());
-  checkfilehandle<std::ofstream>(f, filename);
+// void run_mle(general_settings & settings,
+//              std::vector<pre_calc_per_site> & pre_calc_data) {
+//   std::string filename = settings.outbase + ".F";
+//   std::ofstream f (filename.c_str());
+//   checkfilehandle<std::ofstream>(f, filename);
 
-  std::set<size_t> last_positions_set;
+//   std::set<size_t> last_positions_set;
 
-  double last_minf;
-  std::vector<double>  last_param;
-  nlopt::result last_result;
-  double last_error;
-  size_t last_iterations;
+//   double last_minf;
+//   std::vector<double>  last_param;
+//   nlopt::result last_result;
+//   double last_error;
+//   size_t last_iterations;
 
-  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
-  nlopt::opt opt(nlopt::LD_MMA, 1);
-  std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+//   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
+//   nlopt::opt opt(nlopt::LD_MMA, 1);
+//   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
 
-  opt.set_maxeval(1000);
-  opt.set_lower_bounds(lb);
-  opt.set_upper_bounds(up);
-  opt.set_xtol_abs(0);
-  opt.set_ftol_abs(1e-15);
-  opt.set_xtol_rel(0);
-  opt.set_ftol_rel(0);
-  for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
-    per_mle_run mle_data(pre_calc_data[curr_idx], curr_idx);
-    size_t pos_to_left = (curr_idx > 0) ? curr_idx - 1 : 0;
-    size_t pos_to_right = curr_idx + 1;
-    bool can_go_left = false, can_go_right = false;
-    // keep adding sites to mle_data until we fulfill the requirements
-    while (mle_data.max_pos-mle_data.min_pos < settings.windowsize && mle_data.n_cpgs < settings.max_cpgs) {
-      can_go_right = false;
-      can_go_left = false;
+//   opt.set_maxeval(1000);
+//   opt.set_lower_bounds(lb);
+//   opt.set_upper_bounds(up);
+//   opt.set_xtol_abs(0);
+//   opt.set_ftol_abs(1e-15);
+//   opt.set_xtol_rel(0);
+//   opt.set_ftol_rel(0);
+//   for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
+//     per_mle_run mle_data(pre_calc_data[curr_idx], curr_idx);
+//     size_t pos_to_left = (curr_idx > 0) ? curr_idx - 1 : 0;
+//     size_t pos_to_right = curr_idx + 1;
+//     bool can_go_left = false, can_go_right = false;
+//     // keep adding sites to mle_data until we fulfill the requirements
+//     while (mle_data.max_pos-mle_data.min_pos < settings.windowsize && mle_data.n_cpgs < settings.max_cpgs) {
+//       can_go_right = false;
+//       can_go_left = false;
 
-      if (pos_to_right < pre_calc_data.size() - 1) {
-        can_go_right = true;
-      }
+//       if (pos_to_right < pre_calc_data.size() - 1) {
+//         can_go_right = true;
+//       }
 
-      if (pos_to_left >= 1) {
-        can_go_left = true;
-      }
+//       if (pos_to_left >= 1) {
+//         can_go_left = true;
+//       }
 
-      if(std::max(mle_data.max_pos, mle_data.min_pos) - pre_calc_data[pos_to_left].position > settings.windowsize){
-        can_go_left = false;
-      }
+//       if(std::max(mle_data.max_pos, mle_data.min_pos) - pre_calc_data[pos_to_left].position > settings.windowsize){
+//         can_go_left = false;
+//       }
 
-      if(pre_calc_data[pos_to_right].position - std::min(mle_data.max_pos, mle_data.min_pos) > settings.windowsize){
-        can_go_right = false;
-      }
+//       if(pre_calc_data[pos_to_right].position - std::min(mle_data.max_pos, mle_data.min_pos) > settings.windowsize){
+//         can_go_right = false;
+//       }
 
-      if (!can_go_right && !can_go_left) {
-        // break ;; cannot extend anymore
-        break;
+//       if (!can_go_right && !can_go_left) {
+//         // break ;; cannot extend anymore
+//         break;
 
-      } else if (can_go_right && !can_go_left) {
-        // take the one to the right
-        update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
-        pos_to_right++;
-      } else if (!can_go_right && can_go_left) {
-        // take the one to the left
-        update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
-        pos_to_left--;
-      } else if (can_go_right && can_go_left) {
-        // take the closest
-        if (pre_calc_data[pos_to_right].position - mle_data.curr_pos <=
-            mle_data.curr_pos - pre_calc_data[pos_to_left].position) {
-          // take the one to the right
-          update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
-          pos_to_right++;
-        } else {
-          // take the one to the left
-          update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
-          pos_to_left--;
-        }
-      } else {
-        // we are screwed. should not be possible
-      }
+//       } else if (can_go_right && !can_go_left) {
+//         // take the one to the right
+//         update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
+//         pos_to_right++;
+//       } else if (!can_go_right && can_go_left) {
+//         // take the one to the left
+//         update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
+//         pos_to_left--;
+//       } else if (can_go_right && can_go_left) {
+//         // take the closest
+//         if (pre_calc_data[pos_to_right].position - mle_data.curr_pos <=
+//             mle_data.curr_pos - pre_calc_data[pos_to_left].position) {
+//           // take the one to the right
+//           update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
+//           pos_to_right++;
+//         } else {
+//           // take the one to the left
+//           update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
+//           pos_to_left--;
+//         }
+//       } else {
+//         // we are screwed. should not be possible
+//       }
 
-    } // end while loop
+//     } // end while loop
 
-    // here we can check if the results are identical to last time, then we dont need to do anything besides printing.
-    // see below for the old code where we re calculate every time
-    bool same = false;
-    if(!last_positions_set.empty() && mle_data.positions.size()==last_positions_set.size()){
-      same=true;
-      for(const size_t &  val: mle_data.positions){
-        if(last_positions_set.count(val)!=1){
-          same=false;
-          break;
-        }
-      }
-    }
+//     // here we can check if the results are identical to last time, then we dont need to do anything besides printing.
+//     // see below for the old code where we re calculate every time
+//     bool same = false;
+//     if(!last_positions_set.empty() && mle_data.positions.size()==last_positions_set.size()){
+//       same=true;
+//       for(const size_t &  val: mle_data.positions){
+//         if(last_positions_set.count(val)!=1){
+//           same=false;
+//           break;
+//         }
+//       }
+//     }
 
-    if(!same){
-      last_positions_set.clear();
-      last_positions_set.insert(mle_data.positions.begin(), mle_data.positions.end());
-    }
+//     if(!same){
+//       last_positions_set.clear();
+//       last_positions_set.insert(mle_data.positions.begin(), mle_data.positions.end());
+//     }
 
-    double minf;
-    F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-    std::vector<double> param (1, SMALLTOLERANCE);
-    nlopt::result result;
-    double second_der, error;
-    size_t iterations;
+//     double minf;
+//     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
+//     std::vector<double> param (1, SMALLTOLERANCE);
+//     nlopt::result result;
+//     double second_der, error;
+//     size_t iterations;
 
-    if(! same){
-      if(do_haploid_model){
-        opt.set_max_objective(objective_func_F_haploid, &void_stuff);
-        result = opt.optimize(param, minf);
-        second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
-      } else {
-        opt.set_max_objective(objective_func_F, &void_stuff);
-        result = opt.optimize(param, minf);
-        second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-      }
-      error = 1.96/std::sqrt(-second_der);
-      iterations=void_stuff.iteration;
+//     if(! same){
+//       if(do_haploid_model){
+//         opt.set_max_objective(objective_func_F_haploid, &void_stuff);
+//         result = opt.optimize(param, minf);
+//         second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
+//       } else {
+//         opt.set_max_objective(objective_func_F, &void_stuff);
+//         result = opt.optimize(param, minf);
+//         second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
+//       }
+//       error = 1.96/std::sqrt(-second_der);
+//       iterations=void_stuff.iteration;
 
-      // assign params
-      last_minf = minf;
-      last_param = param;
-      last_result = result;
-      last_error = error;
-      last_iterations = iterations;
-    } else {
-      minf = last_minf;
-      param = last_param;
-      result = last_result;
-      error = last_error;
-      iterations = last_iterations;
-    }
+//       // assign params
+//       last_minf = minf;
+//       last_param = param;
+//       last_result = result;
+//       last_error = error;
+//       last_iterations = iterations;
+//     } else {
+//       minf = last_minf;
+//       param = last_param;
+//       result = last_result;
+//       error = last_error;
+//       iterations = last_iterations;
+//     }
 
-    // // keep this
-    // double minf;
-    // F_void void_stuff(settings, &pre_calc_data, &mle_data);
-    // std::vector<double> param (1, 0.5);
-    // nlopt::result result;
-    // double second_der, error;
-    // size_t iterations;
-    // opt.set_max_objective(objective_func_F, &void_stuff);
-    // result = opt.optimize(param, minf);
-    // second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-    // error = 1.96/std::sqrt(-second_der);
-    // iterations=void_stuff.iteration;
-    // // to this
-
-
-    // // temp
-    // std::vector<double> dummy;
-    // for (double i=0; i<=1; i+=0.01){
-    //   std::vector<double> x(i);
-    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
-    // }
-    // // temp end
-
-    // // probability of dinucleotide genotypes for the site in the center.
-    // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &pre_calc_data[curr_idx]));
-    // double sum_exp = first_dinucl_genotype;
-    // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
-    //   sum_exp += std::exp(val);
-    // }
-    // end
-
-    f << "contig: " << settings.chrom
-      << " Center_pos: " << mle_data.curr_pos
-      << " N_CpGs: " << mle_data.n_cpgs
-      << " Depth: " << mle_data.total_depth
-      << " Distance: " << mle_data.max_pos - mle_data.min_pos
-      << " ll: " << minf
-      << " f: " << param[0]
-      << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
-      << " iterations: " << iterations
-      << " optim_return_code: " << result
-      << " Incl_pos: " << mle_data.positions[0];
-      for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
-        f << ","<< *i;
-      }
-
-      // // printing probability of dinucleotide genotypes for the site in the center.
-      // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ;
-      // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
-      //        f << ","<< std::exp(val)/sum_exp ;
-      // }
-      // end
-
-      f << '\n';
-
-    // // // checking that the derivative is correct
-    // double tmp_ll;
-    // for (double fval=0.0; fval<=1; fval+=0.01){
-    //   std::vector<double> f_vec_temp(1,fval), grad_vec_temp(1,0);
-    //   tmp_ll = objective_func_F(f_vec_temp, grad_vec_temp, &void_stuff);
-    //   f << "f: " << fval << " like: " << tmp_ll  << " " << std::exp(tmp_ll) << " derivative: "  << grad_vec_temp[0] << '\n';
-    // }
-    // f << std::flush;
-    // f.close();
-
-    // std::cerr << "BREAKING";
-    // std::cerr << std::flush;
-    // exit(EXIT_SUCCESS);
+//     // // keep this
+//     // double minf;
+//     // F_void void_stuff(settings, &pre_calc_data, &mle_data);
+//     // std::vector<double> param (1, 0.5);
+//     // nlopt::result result;
+//     // double second_der, error;
+//     // size_t iterations;
+//     // opt.set_max_objective(objective_func_F, &void_stuff);
+//     // result = opt.optimize(param, minf);
+//     // second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
+//     // error = 1.96/std::sqrt(-second_der);
+//     // iterations=void_stuff.iteration;
+//     // // to this
 
 
-  }
-  f << std::flush;
-  f.close();
-}
+//     // // temp
+//     // std::vector<double> dummy;
+//     // for (double i=0; i<=1; i+=0.01){
+//     //   std::vector<double> x(i);
+//     //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
+//     // }
+//     // // temp end
 
-void run_mle_bed(general_settings & settings,
-                 std::vector<pre_calc_per_site> & pre_calc_data,
-                 std::vector<std::pair<size_t, size_t>> & bed_coord) {
-  std::string filename = settings.outbase + ".BED.F";
-  std::ofstream f (filename.c_str());
-  checkfilehandle<std::ofstream>(f, filename);
-  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
-  nlopt::opt opt(nlopt::LD_MMA, 1);
-  std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
-  opt.set_maxeval(1000);
-  opt.set_lower_bounds(lb);
-  opt.set_upper_bounds(up);
-  opt.set_xtol_abs(0);
-  opt.set_ftol_abs(1e-15);
-  opt.set_xtol_rel(0);
-  opt.set_ftol_rel(0);
-  for (const auto & bed : bed_coord){
-    std::vector<size_t> sites_to_include;
-    for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
+//     // // probability of dinucleotide genotypes for the site in the center.
+//     // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &pre_calc_data[curr_idx]));
+//     // double sum_exp = first_dinucl_genotype;
+//     // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
+//     //   sum_exp += std::exp(val);
+//     // }
+//     // end
 
-      if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
+//     f << "contig: " << settings.chrom
+//       << " Center_pos: " << mle_data.curr_pos
+//       << " N_CpGs: " << mle_data.n_cpgs
+//       << " Depth: " << mle_data.total_depth
+//       << " Distance: " << mle_data.max_pos - mle_data.min_pos
+//       << " ll: " << minf
+//       << " f: " << param[0]
+//       << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
+//       << " iterations: " << iterations
+//       << " optim_return_code: " << result
+//       << " Incl_pos: " << mle_data.positions[0];
+//       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
+//         f << ","<< *i;
+//       }
 
-        sites_to_include.push_back(curr_idx);
-      }
-      if(pre_calc_data[curr_idx].position >= bed.second){
-        break;
-      }
+//       // // printing probability of dinucleotide genotypes for the site in the center.
+//       // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ;
+//       // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
+//       //        f << ","<< std::exp(val)/sum_exp ;
+//       // }
+//       // end
 
-    }
-    if( sites_to_include.size()==0){
-      f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
-      continue;
-    }
+//       f << '\n';
 
-    // it is stupid to run over data again, but too tired to make new structs for the BED setup.
-    // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
-    per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
-    for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
-      update_mle_data(mle_data, pre_calc_data[*it], *it);
-    }
+//     // // // checking that the derivative is correct
+//     // double tmp_ll;
+//     // for (double fval=0.0; fval<=1; fval+=0.01){
+//     //   std::vector<double> f_vec_temp(1,fval), grad_vec_temp(1,0);
+//     //   tmp_ll = objective_func_F(f_vec_temp, grad_vec_temp, &void_stuff);
+//     //   f << "f: " << fval << " like: " << tmp_ll  << " " << std::exp(tmp_ll) << " derivative: "  << grad_vec_temp[0] << '\n';
+//     // }
+//     // f << std::flush;
+//     // f.close();
 
-    if(mle_data.total_depth == 0){
-      f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
-      continue;
-    }
+//     // std::cerr << "BREAKING";
+//     // std::cerr << std::flush;
+//     // exit(EXIT_SUCCESS);
 
-    double minf;
-    F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-    // std::vector<double> param (1, 0.5);
-    std::vector<double> param (1, SMALLTOLERANCE);
-    nlopt::result result;
-    double second_der, error;
-    size_t iterations;
 
-    // // temp
-    // std::vector<double> dummy;
-    // for (double i=0; i<=1; i+=0.01){
-    //   std::vector<double> x(i);
-    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
-    // }
-    // loglikelihood_after_mle(param[0],
-    // // temp end
+//   }
+//   f << std::flush;
+//   f.close();
+// }
 
-    if(do_haploid_model){
-      opt.set_max_objective(objective_func_F_haploid, &void_stuff);
-      result = opt.optimize(param, minf);
-      second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
-    } else {
-      opt.set_max_objective(objective_func_F, &void_stuff);
-      result = opt.optimize(param, minf);
-      second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-    }
-    error = 1.96/std::sqrt(-second_der);
-    iterations=void_stuff.iteration;
+// void run_mle_bed(general_settings & settings,
+//                  std::vector<pre_calc_per_site> & pre_calc_data,
+//                  std::vector<std::pair<size_t, size_t>> & bed_coord) {
+//   std::string filename = settings.outbase + ".BED.F";
+//   std::ofstream f (filename.c_str());
+//   checkfilehandle<std::ofstream>(f, filename);
+//   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
+//   nlopt::opt opt(nlopt::LD_MMA, 1);
+//   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+//   opt.set_maxeval(1000);
+//   opt.set_lower_bounds(lb);
+//   opt.set_upper_bounds(up);
+//   opt.set_xtol_abs(0);
+//   opt.set_ftol_abs(1e-15);
+//   opt.set_xtol_rel(0);
+//   opt.set_ftol_rel(0);
+//   for (const auto & bed : bed_coord){
+//     std::vector<size_t> sites_to_include;
+//     for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
 
-    f << settings.chrom << ":" << bed.first<<"-"<<bed.second
-      << " N_CpGs: " << mle_data.n_cpgs
-      << " Depth: " << mle_data.total_depth
-      << " Distance: " << mle_data.max_pos - mle_data.min_pos
-      << " ll: " << minf
-      << " f: " << param[0]
-      << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
-      << " iterations: " << iterations
-      << " optim_return_code: " << result
-      << " Incl_pos: " << mle_data.positions[0];
-      for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
-        f << ","<< *i;
-      }
-      f << std::endl;
+//       if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
 
-  }
-  f.close();
-}
+//         sites_to_include.push_back(curr_idx);
+//       }
+//       if(pre_calc_data[curr_idx].position >= bed.second){
+//         break;
+//       }
+
+//     }
+//     if( sites_to_include.size()==0){
+//       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
+//       continue;
+//     }
+
+//     // it is stupid to run over data again, but too tired to make new structs for the BED setup.
+//     // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
+//     per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
+//     for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
+//       update_mle_data(mle_data, pre_calc_data[*it], *it);
+//     }
+
+//     if(mle_data.total_depth == 0){
+//       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
+//       continue;
+//     }
+
+//     double minf;
+//     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
+//     // std::vector<double> param (1, 0.5);
+//     std::vector<double> param (1, SMALLTOLERANCE);
+//     nlopt::result result;
+//     double second_der, error;
+//     size_t iterations;
+
+//     // // temp
+//     // std::vector<double> dummy;
+//     // for (double i=0; i<=1; i+=0.01){
+//     //   std::vector<double> x(i);
+//     //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
+//     // }
+//     // loglikelihood_after_mle(param[0],
+//     // // temp end
+
+//     if(do_haploid_model){
+//       opt.set_max_objective(objective_func_F_haploid, &void_stuff);
+//       result = opt.optimize(param, minf);
+//       second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
+//     } else {
+//       opt.set_max_objective(objective_func_F, &void_stuff);
+//       result = opt.optimize(param, minf);
+//       second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
+//     }
+//     error = 1.96/std::sqrt(-second_der);
+//     iterations=void_stuff.iteration;
+
+//     f << settings.chrom << ":" << bed.first<<"-"<<bed.second
+//       << " N_CpGs: " << mle_data.n_cpgs
+//       << " Depth: " << mle_data.total_depth
+//       << " Distance: " << mle_data.max_pos - mle_data.min_pos
+//       << " ll: " << minf
+//       << " f: " << param[0]
+//       << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
+//       << " iterations: " << iterations
+//       << " optim_return_code: " << result
+//       << " Incl_pos: " << mle_data.positions[0];
+//       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
+//         f << ","<< *i;
+//       }
+//       f << std::endl;
+
+//   }
+//   f.close();
+// }
 
 double base_condition_one_genotype(const size_t &strand, const double &deam,
                                    const double &seqerror, const size_t &base,
@@ -1435,35 +1435,34 @@ void load_rg_from_file(general_settings & settings, rgs_info &rgs){
     rgs.n = rgs.rgs.size();
 }
 
-void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, size_t>> & res){
-  std::string filename = settings.bed_f;
-  std::ifstream f (filename.c_str());
-  checkfilehandle<std::ifstream>(f, filename);
-  if(f.is_open()){
-    std::string row;
-    std::string chrom;
-    size_t start,end ;
-    std::stringstream ss;
-    while(getline(f, row)){
-      if(row.empty()){
-        std::cerr << "BED: "<< settings.bed_f << " contains empty rows. EXITING" << '\n';
-        exit(EXIT_FAILURE);
-      }
-      ss.str(row);
+// void parse_bed_file(std::string filename, std::vector<std::pair<size_t, size_t>> & res){
+//   std::ifstream f (filename.c_str());
+//   checkfilehandle<std::ifstream>(f, filename);
+//   if(f.is_open()){
+//     std::string row;
+//     std::string chrom;
+//     size_t start,end ;
+//     std::stringstream ss;
+//     while(getline(f, row)){
+//       if(row.empty()){
+//         std::cerr << "BED: "<< filename << " contains empty rows. EXITING" << '\n';
+//         exit(EXIT_FAILURE);
+//       }
+//       ss.str(row);
 
-      ss >> chrom >> start >> end;
-      if(start>=end){
-        std::cerr << "BED: "<< settings.bed_f << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
-        exit(EXIT_FAILURE);
-      }
-      if(chrom==settings.chrom){
-        res.push_back(std::make_pair (start,end));
-      }
-      ss.clear();
-    }
-  }
-  f.close();
-}
+//       ss >> chrom >> start >> end;
+//       if(start>=end){
+//         std::cerr << "BED: "<< settings.bed_f << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
+//         exit(EXIT_FAILURE);
+//       }
+//       if(chrom==settings.chrom){
+//         res.push_back(std::make_pair (start,end));
+//       }
+//       ss.clear();
+//     }
+//   }
+//   f.close();
+// }
 
 void print_d(pre_calc_per_site & d){
   std::cout << d.depth << " " << d.position <<  '\n';
@@ -1709,14 +1708,8 @@ void est_dam_only(general_settings & settings) {
 
   my_cov_rg cov_rg(rgs.n);
 
-  // open and close bam files inside this function as well. no need to do this out of scope
-  // remember to release the data as well.
-  // use the string split for priors to create chroms
-  // alternative let user pass a file with chromosomes.
-  std::vector<std::string> chroms;
-  chroms.push_back("20");
-  for(auto & chrom : chroms){
-    parse_reads_per_chrom(settings, chrom, tm,
+  for(auto & c : settings.chrom){
+    parse_reads_per_chrom(settings, c, tm,
                           cpg_data, nocpg_data,
                           rgs, cov_rg);
   }

@@ -1,10 +1,28 @@
 #include "myargparser.hpp"
-#include <cstdlib>
-#include <iostream>
-#include <unistd.h>
-#include <sys/stat.h> // mkdir
+
+std::vector<std::string> split_comma_chrom(std::string & chrom){
+  std::vector<std::string> res;
+  std::stringstream ss( chrom );
+  while( ss.good() ){
+    std::string substr;
+    getline( ss, substr, ',' );
+    res.push_back( substr );
+  }
+  return res;
+}
 
 
+std::vector<std::string> parse_chrom(std::string & d){
+  if (check_file_exists(d)){
+    return parse_chrom_file(d);
+  } else if (d.find(",") != std::string::npos){
+    return split_comma_chrom(d);
+  } else {
+    std::vector<std::string> res;
+    res.push_back(d);
+    return(res);
+  }
+}
 
 void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
@@ -22,7 +40,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       break;
     case 'c':
       if (optarg)
-        settings.chrom = std::string(optarg);
+        settings.chrom_temp = std::string(optarg);
       break;
     // case 'T':
     //   if (optarg){
@@ -133,7 +151,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   if(settings.outbase.empty()){
     settings.outbase="dammet_res";
     mkdir(settings.outbase.c_str(),0777);
-    settings.outbase += "/"+settings.chrom;
+    // settings.outbase += "/"+settings.chrom;
   }
 
   if(settings.minmapQ < 1){
@@ -147,10 +165,17 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     settings.minreadlength_deam=settings.minreadlength;
   }
 
+  if(settings.chrom_temp.empty()){
+    std::cerr << "Have to parse chrom (-c) as string,comma-seperated-chroms,chrom-file" << '\n';
+    exit(EXIT_FAILURE);
+  } else {
+    settings.chrom = parse_chrom(settings.chrom_temp);
+  }
+  
   std::string ss("");
   ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
   ss += "\t-> REF (-r): " + settings.reference_fn + '\n';
-  ss += "\t-> Chromosome (-c): " + settings.chrom + '\n';
+  ss += "\t-> Chromosome (-c): " + settings.chrom_temp + '\n';
 
   ss += "\t-> BED file (-B): " + settings.bed_f + '\n';
   ss += "\t-> minmapQ (-q): " + std::to_string(settings.minmapQ) + '\n';
