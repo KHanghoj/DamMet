@@ -1,7 +1,11 @@
 #include <iostream> // stdout/stdin/stderr
 #include <string>
 #include <vector>
-#include "htslib/faidx.h"
+#include <sstream> //stringstream
+#include <fstream>  // open file
+
+#include "load_fasta.hpp"
+
 
 faidx_t * ref_init(std::string & filename){
   faidx_t * fai = fai_load(filename.c_str());

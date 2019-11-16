@@ -8,6 +8,42 @@
 #include <iomanip> // setprecision
 
 
+template <typename T>
+void checkfilehandle(T &fh, std::string filename){
+  if (! fh.is_open()){
+    std::cerr << "Couldnt open file: " << filename << " EXITING " << std::endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
+template <class T>
+void print_struct(std::unique_ptr<Obs> &data, T & out){
+  out << data->pr << " " <<
+    data->st << " " <<
+    data->rp << " " <<
+    data->rl << " " <<
+    data->bc << " " <<
+    data->se << " " <<
+    data->me << '\n';
+}
+
+void print_data(uni_ptr_obs &cpg_data,
+                uni_ptr_obs &nocpg_data
+                ){
+  for (auto &x: cpg_data){
+    print_struct(x, std::cout);
+  }
+  for (auto &x: nocpg_data){
+    print_struct(x, std::cout);
+  }
+}
+
+void print_log(general_settings & settings){
+  std::cerr << settings.buffer;
+  settings.args_stream << settings.buffer;
+  settings.buffer.clear();
+}
+
 // Returns logl( expl(x)+expl(y) )
 inline double oplusnatl(const double & x, const double & y ){
     return x > y
@@ -28,19 +64,6 @@ inline T oplusInitnatl(const T & x,const T & y ){
     return x > y
       ? x + std::log1p( std::exp( y-x ) )
       : y + std::log1p( std::exp( x-y ) )  ;
-}
-
-template <typename T>
-void checkfilehandle(T &fh, std::string filename){
-  if (! fh.is_open()){
-    std::cerr << "Couldnt open file: " << filename << " EXITING " << std::endl;
-    exit(EXIT_FAILURE);
-  }
-}
-
-bool check_file_exists(std::string filename){
-  std::ifstream f(filename.c_str(), std::ios::in);
-  return f.good();
 }
 
 double phred_to_double(size_t & phred){
@@ -169,7 +192,7 @@ size_t get_idx_tm(const size_t & readpos,
 void dump_count_file(general_settings & settings, std::vector<int> & tm, std::string & rg){
   std::string filename = settings.outbase + "." + rg + ".tallycounts";
   std::ofstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ofstream>(f, filename);
   std::vector<int> info(N_types_TM, 0);
   if (f.is_open()) {
     for (int i=0; i<tm.size(); i++)
@@ -189,7 +212,7 @@ std::vector<double> read_count_file(general_settings & settings, std::string & r
   std::vector<double> res = init_tallymat<double>(settings.max_pos_to_end);
   std::string filename = settings.outbase + "." + rg + ".tallycounts";
   std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ifstream>(f, filename);
 
   if(f.is_open()){
     std::string row;
@@ -263,8 +286,8 @@ bool nucleotide_missing(const int & r_base1, const int & r_base2, const int & s_
   return (r_base1>=4 || r_base2>=4 || s_base1>=4 || s_base2>=4);
 }
 
-bool base_is_indel(const int & base1, const int & base2){
-  return (base1==5 || base2==5);
+bool base_is_indel(const int & b){
+  return (b==5);
 }
 
 alignment_data align_read(bam1_t * rd, char * ref){
@@ -321,7 +344,6 @@ alignment_data align_read(bam1_t * rd, char * ref){
           // isop[ii] = rd->core.l_qseq - seq_pos - 1;
           d.t_qs.push_back(quals[seq_pos]);
           // qs[ii] = quals[seq_pos];
-          // d.t_ref.push_back(4);
           // 5 reflects an indel
           d.t_ref.push_back(5);
 
@@ -332,7 +354,6 @@ alignment_data align_read(bam1_t * rd, char * ref){
         wpos++;
       } else { // this is the deletion part
         for(int ii=0;ii<opLen;ii++){
-          // d.t_seq.push_back(4);
           // 5 reflects an indel
           d.t_seq.push_back(5);
           // seq[ii] =  bam_is_rev(rd) ? tolower(c) : toupper(c);
@@ -428,8 +449,8 @@ bool check_base_quality(const general_settings &settings,
   if (d.t_seq[i_l] >=4 || d.t_seq[i_r] >= 4 || // is read N
       d.t_ref[i_l] >=4 || d.t_ref[i_r] >= 4 || // is reference N
       d.t_qs[i_l] <settings.minbaseQ || d.t_qs[i_r] < settings.minbaseQ || // base quality
-      (i_l>0 && base_is_indel(d.t_ref[i_l-1], d.t_seq[i_l-1])) || // left is indel
-      (i_r+1 <= d.t_seq.size()-1 && base_is_indel(d.t_ref[i_r+1], d.t_seq[i_r+1])) // right is indel
+      (i_l>0 && (base_is_indel(d.t_ref[i_l-1]) || base_is_indel(d.t_seq[i_l-1]))) || // left is indel
+      (i_r+1 <= d.t_seq.size()-1 && (base_is_indel(d.t_ref[i_r+1]) || base_is_indel(d.t_seq[i_r+1]))) // right is indel
       ) {
     trash = true;
   }
@@ -438,7 +459,7 @@ bool check_base_quality(const general_settings &settings,
 
 unint get_bc(const int & obs, // obs
              const int & no_ch, // ref
-             const int &ch){ //  deamin/mut/error
+             const int & ch){ //  deamin/mut/error
   if(obs == no_ch){
     return 0;
   } else if (obs == ch){
@@ -453,10 +474,10 @@ void add_aligned_data(general_settings &settings,
                       uni_ptr_obs &cpg_data,
                       uni_ptr_obs &nocpg_data,
                       std::vector<int> &tm,
-                      my_cov_rg & cov_rg,
-                      size_t & rg_idx,
-                      size_t & ncycles,
-                      size_t & exclude_CnonCpG) {
+                      my_cov_rg &cov_rg,
+                      size_t &rg_idx,
+                      size_t &ncycles,
+                      size_t &exclude_CnonCpG) {
 
   unint dist_5p, dist_3p;
   unint pos, prime, bc;
@@ -710,19 +731,17 @@ void run_deamrates_optim(general_settings & settings,
                          const std::vector<double> & tmf,
                          uni_ptr_obs &cpg_data,
                          uni_ptr_obs &nocpg_data,
-                         std::string & rg,
-                         size_t & rg_idx,
-                         my_cov_rg & cov_rg){
+                         std::string & rg){
   time_t start_time_optim,end_time_optim;
   time(&start_time_optim);
   std::string filename = settings.outbase + "." + rg + ".deamrates";
   std::ofstream f (filename.c_str());
-  checkfilehandle(f, filename);
-  std::vector<double> param2 = single_array_parameters(settings.max_pos_to_end, tmf);
+  checkfilehandle<std::ofstream>(f, filename);
+  std::vector<double> param = single_array_parameters(settings.max_pos_to_end, tmf);
 
-  std::vector<double> param(param2.size(), 0.5);
+  // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
 
-  deamrates_void void_stuff(&settings, cpg_data, nocpg_data, rg_idx);
+  deamrates_void void_stuff(&settings, cpg_data, nocpg_data);
   // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
   std::vector<double> t; // just a dummy
   f << "##Initial (param are freq from tallycounts file) llh: " << objective_func_deamrates(param, t, &void_stuff) << std::endl;
@@ -748,8 +767,11 @@ void run_deamrates_optim(general_settings & settings,
   double minf;
   nlopt::result result = opt.optimize(param, minf);
   time(&end_time_optim);
-  std::cerr << "\t-> Iteration: " << void_stuff.iteration << " llh: " << minf  << " in " << difftime(end_time_optim, start_time_optim) << " seconds" << '\n';
-  settings.args_stream << "\t-> Iteration: " << void_stuff.iteration << " llh: " << minf  << " in " << difftime(end_time_optim, start_time_optim) << " seconds" << '\n';
+  settings.buffer += "\t-> Iteration: " + std::to_string(void_stuff.iteration) +
+    " llh: " + std::to_string(minf) + " in " +
+    std::to_string(difftime(end_time_optim, start_time_optim)) + " seconds" + '\n';
+  print_log(settings);
+
   f << "##Optim return code: " << result << std::endl;
   f << "##Iterations: " << void_stuff.iteration << std::endl;
   f << "##llh: " << minf << std::endl;
@@ -760,68 +782,12 @@ void run_deamrates_optim(general_settings & settings,
 }
 
 
-void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref){
-   std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
-  if(f.is_open()){
-    std::string row, chrom;
-    size_t pos;
-    std::stringstream ss;
-    while(getline(f, row)){
-      ss.str(row);
-      ss >> chrom >> pos;
-      if(chrom == selected_chrom){
-        // -1 as it has to be zero-based :)
-        if(pos>0){
-          ref[pos-1] = 'N';
-        } else {
-          std::cerr << "Something is not correct in sites file: " << filename
-                    << " at region: " << chrom << " " << pos
-                    << " EXITING!!!!! " << std::endl;
-          exit(EXIT_FAILURE);
-        }
-      }
-      ss.clear();
-    }
-  }
-}
-
-
-void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref){
-  std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
-  if(f.is_open()){
-    std::string row, chrom;
-    size_t start, end;
-    std::stringstream ss;
-    while(getline(f, row)){
-      ss.str(row);
-      ss >> chrom >> start >> end;
-      if (chrom == selected_chrom) {
-        if (start >= end) {
-          std::cerr << "Something is not correct in BED file: " << filename
-                    << " at region: " << chrom << " " << start << " " << end
-                    << " EXITING!!!!! " << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        for (size_t val = start; val < end; val++) {
-          ref[val] = 'N';
-        }
-      }
-      ss.clear();
-    }
-  }
-  f.close();
-}
-
-
-
 std::vector<double> load_deamrates(general_settings & settings, std::string & rg){
   size_t max_length = PRIMES*(settings.max_pos_to_end+2)*PRIMES ;
   std::vector<double> res(max_length, SMALLTOLERANCE);
   std::string filename = settings.outbase + "." + rg + ".deamrates";
   std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ifstream>(f, filename);
   if(f.is_open()){
     std::string row;
     size_t methstate, pos, prime;
@@ -848,7 +814,7 @@ std::vector<double> load_deamrates_f(general_settings & settings){
   std::vector<double> res(max_length, SMALLTOLERANCE);
   std::string filename = settings.deamrates_filename;
   std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ifstream>(f, filename);
   if(f.is_open()){
     std::string row;
     size_t methstate, pos, prime;
@@ -1513,11 +1479,6 @@ void print_help(){
   exit(EXIT_SUCCESS);
 }
 
-void print_log(general_settings & settings){
-  std::cerr << settings.buffer;
-  settings.args_stream << settings.buffer;
-  settings.buffer.clear();
-}
 
 void est_dam_only(general_settings & settings) {
   std::string stream_filename (settings.outbase+".args");
@@ -1737,29 +1698,29 @@ void est_dam_only(general_settings & settings) {
                     cycles[rgname_idx],
                     exclude_CnonCpGs[rgname_idx]);
   }
-#if 1
-  std::cerr << "N: " << cpg_data[0].size() << " " << nocpg_data[0].size() << '\n';
-#endif
   time(&end_time_load_data);
+
   settings.buffer += "\t-> Processed: " + std::to_string(counter)  +
     ". Reads filtered: " + std::to_string(trashed) +
     ". Reads skipped (nocpg overlap): " + std::to_string(reads_skipped) +
     ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
+
+
   print_log(settings);
   for (size_t i=0; i<rgs.size(); i++){
     settings.buffer += "\t-> Total_Observations RG: "+ rgs[i] +
-      " CpG: " + std::to_string(cov_rg.cpg[i]) +
-      " CpGCoverage and CnonCpGCoverage: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) + " " + std::to_string(cov_rg.nocpg[i]) + '\n';
+      " CpG/cnonCpG: " + std::to_string(cov_rg.cpg[i]) + " " + std::to_string(cov_rg.nocpg[i]) +
+      " CpGcov: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) + '\n';
     print_log(settings);
   }
+
+  // dumping counts to file
   for (size_t i=0; i<rgs.size(); i++){
     settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + rgs[i] +  ".tallycounts" + '\n';
     print_log(settings);
     dump_count_file(settings, tm[i], rgs[i]);
     tmf[i] = read_count_file(settings, rgs[i]);
   }
-
-  // mark_no_deam_CT_GA(settings, data);
 
   std::vector<std::vector<double>> param_deam;
   param_deam.resize(rgs.size());
@@ -1778,7 +1739,10 @@ void est_dam_only(general_settings & settings) {
     // }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
       print_log(settings);
-      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs[i], i, cov_rg);
+#if 1
+      print_data(cpg_data[i], nocpg_data[i]);
+#endif
+      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs[i]);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam[i] = load_deamrates(settings, rgs[i]);
@@ -1825,6 +1789,6 @@ int main(int argc, char *argv[]) {
   double time_gone = difftime(end_time, start_time);
   size_t minutes = time_gone / 60.0;
   size_t seconds = (int)time_gone % 60;
-  settings.buffer += "\t-> Done in " + std::to_string(minutes)+ ":" + std::to_string(seconds) + " M:S.";
+  settings.buffer += "\t-> Done in " + std::to_string(minutes)+ ":" + std::to_string(seconds) + " M:S." + '\n';
   print_log(settings);
 }

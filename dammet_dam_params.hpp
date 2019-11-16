@@ -18,6 +18,7 @@
 #include "htslib/htslib/hts.h"
 #include "htslib/htslib/sam.h"
 
+#include "file_handling.hpp"
 #include "load_fasta.hpp"
 #include "nucl_conv.hpp"
 #include "myargparser.hpp"
@@ -26,6 +27,8 @@
 
 using v_un_ch = std::vector<unsigned char>;
 
+template <typename T>
+void checkfilehandle(T &fh, std::string filename);
 
 /// STRUCTS
 struct my_cov_rg {
@@ -163,20 +166,16 @@ struct Site {
 
 
 struct deamrates_void {
-  general_settings * settings;
-  uni_ptr_obs cpg_data, nocpg_data;
-  size_t iteration=0, rg_idx;
-  //std::vector<std::vector<size_t>> *cpg_idx;
-  //std::vector<size_t> *nocpg_idx;
   deamrates_void(general_settings * _settings,
                  uni_ptr_obs &_cpg_data,
-                 uni_ptr_obs &_nocpg_data,
-                 size_t &_rg_idx){
+                 uni_ptr_obs &_nocpg_data){
     settings = _settings;
     cpg_data = std::move(_cpg_data);
     nocpg_data = std::move(_nocpg_data);
-    rg_idx = _rg_idx;
   };
+  general_settings * settings;
+  uni_ptr_obs cpg_data, nocpg_data;
+  size_t iteration=0;
 
 };
 
@@ -204,10 +203,10 @@ inline double oplusnatl(const double & x, const double & y );
 template <typename T>
 inline T oplusInitnatl(const T & x,const T & y );
 
-template <typename T>
-void checkfilehandle(T &fh, std::string filename);
+// template <typename T>
+// void checkfilehandle(T &fh, std::string filename);
 
-bool check_file_exists(std::string filename);
+// bool check_file_exists(std::string filename);
 
 // double phred_to_double(int & phred);
 
@@ -316,10 +315,9 @@ std::vector<double> read_count_file(general_settings & settings, std::string & r
 
 
 // alignment
-void get_bases(const alignment_data & d, const int & b1, const int & b2, int & r_base1, int & r_base2, int & s_base1, int & s_base2);
 void get_pos_and_prime(general_settings & settings, const size_t & dist_3p, const size_t & dist_5p, size_t & pos, size_t & prime);
 bool nucleotide_missing(const int & r_base1, const int & r_base2, const int & s_base1, const int & s_base2);
-bool base_is_indel(const int & base1, const int & base2);
+bool base_is_indel(const int & base1);
 alignment_data align_read(bam1_t * rd, char * ref);
 bool no_ref_cpg(const int & r_base1, const int & r_base2);
 bool cpg(const int & base1, const int & base2);
@@ -335,8 +333,3 @@ void add_aligned_data(general_settings &settings,
                       size_t & rg_idx,
                       size_t & ncycles,
                       size_t & exclude_CnonCpG);
-
-
-
-
-// as i provide rgs.size() this has to be a 'const type & val' or just 'type val'
