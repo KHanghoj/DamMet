@@ -18,7 +18,7 @@
 #include "htslib/htslib/hts.h"
 #include "htslib/htslib/sam.h"
 
-#include "file_handling.hpp"
+// #include "file_handling.hpp"
 #include "load_fasta.hpp"
 #include "nucl_conv.hpp"
 #include "myargparser.hpp"
@@ -30,12 +30,16 @@ using v_un_ch = std::vector<unsigned char>;
 template <typename T>
 void checkfilehandle(T &fh, std::string filename);
 
+bool check_file_exists(std::string filename);
+void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref);
+void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref);
+
 /// STRUCTS
 struct my_cov_rg {
   std::vector<size_t> nocpg, cpg;
-  my_cov_rg(size_t rgs_size){
-    nocpg.resize(rgs_size,0);
-    cpg.resize(rgs_size,0);
+  my_cov_rg(size_t & rgs_size){
+    nocpg.resize(rgs_size, 0);
+    cpg.resize(rgs_size, 0);
   }
 } ;
 
@@ -164,6 +168,12 @@ struct Site {
   std::vector<std::unique_ptr<Obs>> data;
 };
 
+struct rgs_info {
+  bool rg_split=false;
+  std::vector<std::string> rgs;
+  std::vector<size_t> cycles;
+  size_t n = 0;
+};
 
 struct deamrates_void {
   deamrates_void(general_settings * _settings,

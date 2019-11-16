@@ -132,3 +132,15 @@ int main(){
 
   make_a_move(v2);
 }
+
+  // // parsing bedfile if provided
+  // if(!settings.bed_f.empty()){
+  //   parse_bed_file(settings, bed_coord);
+  //   settings.buffer += "\t-> Analyzing: " + std::to_string(bed_coord.size()) + " BED regions on chrom: " + settings.chrom + '\n';
+  //   print_log(settings);
+
+  //   if(bed_coord.size()==0){
+  //     std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
+  //     exit(EXIT_SUCCESS);
+  //   }
+  // }

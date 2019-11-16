@@ -16,6 +16,66 @@ void checkfilehandle(T &fh, std::string filename){
   }
 }
 
+bool check_file_exists(std::string filename){
+  std::ifstream f(filename.c_str(), std::ios::in);
+  return f.good();
+}
+
+void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref){
+   std::ifstream f (filename.c_str());
+   checkfilehandle<std::ifstream>(f, filename);
+   if(f.is_open()){
+     std::string row, chrom;
+     size_t pos;
+     std::stringstream ss;
+     while(getline(f, row)){
+       ss.str(row);
+       ss >> chrom >> pos;
+       if(chrom == selected_chrom){
+         // -1 as it has to be zero-based :)
+         if(pos>0){
+           ref[pos-1] = 'N';
+         } else {
+           std::cerr << "Something is not correct in sites file: " << filename
+                     << " at region: " << chrom << " " << pos
+                     << " EXITING!!!!! " << std::endl;
+           exit(EXIT_FAILURE);
+         }
+       }
+       ss.clear();
+     }
+   }
+}
+
+
+void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref){
+  std::ifstream f (filename.c_str());
+  checkfilehandle<std::ifstream>(f, filename);
+  if(f.is_open()){
+    std::string row, chrom;
+    size_t start, end;
+    std::stringstream ss;
+    while(getline(f, row)){
+      ss.str(row);
+      ss >> chrom >> start >> end;
+      if (chrom == selected_chrom) {
+        if (start >= end) {
+          std::cerr << "Something is not correct in BED file: " << filename
+                    << " at region: " << chrom << " " << start << " " << end
+                    << " EXITING!!!!! " << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        for (size_t val = start; val < end; val++) {
+          ref[val] = 'N';
+        }
+      }
+      ss.clear();
+    }
+  }
+  f.close();
+}
+
+
 template <class T>
 void print_struct(std::unique_ptr<Obs> &data, T & out){
   out << data->pr << " " <<
@@ -476,8 +536,7 @@ void add_aligned_data(general_settings &settings,
                       std::vector<int> &tm,
                       my_cov_rg &cov_rg,
                       size_t &rg_idx,
-                      size_t &ncycles,
-                      size_t &exclude_CnonCpG) {
+                      size_t &ncycles) {
 
   unint dist_5p, dist_3p;
   unint pos, prime, bc;
@@ -1039,7 +1098,7 @@ void run_mle(general_settings & settings,
              std::vector<pre_calc_per_site> & pre_calc_data) {
   std::string filename = settings.outbase + ".F";
   std::ofstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ofstream>(f, filename);
 
   std::set<size_t> last_positions_set;
 
@@ -1248,7 +1307,7 @@ void run_mle_bed(general_settings & settings,
                  std::vector<std::pair<size_t, size_t>> & bed_coord) {
   std::string filename = settings.outbase + ".BED.F";
   std::ofstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ofstream>(f, filename);
   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
   nlopt::opt opt(nlopt::LD_MMA, 1);
   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
@@ -1409,11 +1468,37 @@ void update_dinucl_priors(general_settings & settings){
 
 }
 
+void load_rg_from_file(general_settings & settings, rgs_info &rgs){
+    std::ifstream f (settings.readgroups_f.c_str());
+    checkfilehandle<std::ifstream>(f, settings.readgroups_f);
+    std::string row, rg, cycle_string;
+    size_t cycle;
+    std::stringstream ss;
+    rgs.rg_split = true;
+    while(getline(f, row)){
+      ss.str(row);
+      ss >> rg >> cycle_string;
+      if(cycle_string.empty()){
+        cycle=std::numeric_limits<size_t>::max();
+        settings.buffer += "\t-> RG: " + rg + '\n';
+      } else {
+        cycle=std::stoi(cycle_string);
+        settings.buffer += "\t-> RG: " + rg + ". Sequencing cycles: " + cycle_string + '\n';
+      }
+      rgs.rgs.push_back(rg);
+      rgs.cycles.push_back(cycle);
+      ss.clear();
+      rg.clear();
+      cycle_string.clear();
+    }
+    f.close();
+    rgs.n = rgs.rgs.size();
+}
 
 void parse_bed_file(general_settings & settings, std::vector<std::pair<size_t, size_t>> & res){
   std::string filename = settings.bed_f;
   std::ifstream f (filename.c_str());
-  checkfilehandle(f, filename);
+  checkfilehandle<std::ifstream>(f, filename);
   if(f.is_open()){
     std::string row;
     std::string chrom;
@@ -1483,21 +1568,11 @@ void print_help(){
 void est_dam_only(general_settings & settings) {
   std::string stream_filename (settings.outbase+".args");
   settings.args_stream.open(stream_filename.c_str());
-  checkfilehandle(settings.args_stream, stream_filename);
+  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
   settings.args_stream << settings.all_options;
 
   std::vector<std::pair<size_t, size_t>> bed_coord;
-  // parsing bedfile if provided
-  if(!settings.bed_f.empty()){
-    parse_bed_file(settings, bed_coord);
-    settings.buffer += "\t-> Analyzing: " + std::to_string(bed_coord.size()) + " BED regions on chrom: " + settings.chrom + '\n';
-    print_log(settings);
 
-    if(bed_coord.size()==0){
-      std::cerr << '\n' << "EXITING. NOT BED COORDS ON CHROM" << '\n';
-      exit(EXIT_SUCCESS);
-    }
-  }
 
   // open BAM for reading
   samFile *in = sam_open(settings.bam_fn.c_str(), "r");
@@ -1524,50 +1599,47 @@ void est_dam_only(general_settings & settings) {
     exit(EXIT_FAILURE);
   }
 
+
   // load read groups
-  bool rg_split;
-  std::vector<std::string> rgs;
-  std::vector<size_t> cycles;
+
+  rgs_info rgs;
+
   if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
-    rg_split = true;
-    std::ifstream f (settings.readgroups_f.c_str());
-    checkfilehandle(f, settings.readgroups_f);
-    std::string row, rg, cycle_string;
-    size_t cycle;
-    std::stringstream ss;
-    while(getline(f, row)){
-      ss.str(row);
-      ss >> rg >> cycle_string;
-      if(cycle_string.empty()){
-        cycle=std::numeric_limits<size_t>::max();
-        settings.buffer += "\t-> RG: " + rg + '\n';
-        print_log(settings);
-      } else {
-        cycle=std::stoi(cycle_string);
-        settings.buffer += "\t-> RG: " + rg + ". Sequencing cycles: " + cycle_string + '\n';
-        print_log(settings);
-      }
-      rgs.push_back(rg);
-      cycles.push_back(cycle);
-      ss.clear();
-      rg.clear();
-      cycle_string.clear();
-    }
-    f.close();
+    load_rg_from_file(settings, rgs);
   } else {
-    rg_split = false;
-    rgs.push_back(ALL_RG);
+    rgs.rg_split = false;
+    rgs.rgs.push_back(ALL_RG);
     settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
     if(settings.cycles!=std::numeric_limits<size_t>::max()){
-      cycles.push_back(settings.cycles);
+      rgs.cycles.push_back(settings.cycles);
       settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
     } else {
-      cycles.push_back(std::numeric_limits<size_t>::max());
+      rgs.cycles.push_back(std::numeric_limits<size_t>::max());
     }
     settings.buffer += '\n';
-    print_log(settings);
+    rgs.n = 1;
   }
 
+  print_log(settings);
+
+  std::vector<std::vector<double>> tmf;
+  tmf.resize(rgs.n);
+  std::vector<std::vector<int>> tm;
+  tm.resize(rgs.n);
+  for (size_t i=0; i<rgs.n; i++){
+    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
+  }
+
+  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
+  cpg_data.resize(rgs.n);
+  nocpg_data.resize(rgs.n);
+
+
+  my_cov_rg cov_rg(rgs.n);
+
+  // for( auto &chrom : chroms){
+  //   parse_reads_per_chrom(chrom, tmf, tm, cpg_data, nocpg_data, rgs, )
+  //     }
   // go to the correct chromosome
   // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
   hts_itr_t *iter = sam_itr_querys(idx, header, settings.chrom.c_str());
@@ -1591,15 +1663,6 @@ void est_dam_only(general_settings & settings) {
     filter_ref_sites(settings.chrom, settings.exclude_sites_fn, ref);
   }
 
-  std::vector<std::vector<double>> tmf;
-  tmf.resize(rgs.size());
-  std::vector<std::vector<int>> tm;
-  tm.resize(rgs.size());
-  for (size_t i=0; i<rgs.size(); i++){
-    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
-  }
-
-  my_cov_rg cov_rg(rgs.size());
 
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref, seq_len);
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
@@ -1607,16 +1670,6 @@ void est_dam_only(general_settings & settings) {
   settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + settings.chrom + '\n';
   print_log(settings);
 
-  // do not included CnonCpGs if deamrates are already provided.
-  std::vector<size_t> exclude_CnonCpGs(rgs.size(), 0);
-
-  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
-  cpg_data.resize(rgs.size());
-  nocpg_data.resize(rgs.size());
-  // std::vector<per_site> data;
-  // data.resize(cpg_map.size());
-  //size_t nocpg_to_include = 1e6;
-  // per_site_nocpg nocpg_data(nocpg_to_include);
 
   bam1_t *rd = bam_init1();
   alignment_data d;
@@ -1664,10 +1717,10 @@ void est_dam_only(general_settings & settings) {
       continue;
     }
 
-    if (rg_split) {
+    if (rgs.rg_split) {
       rgptr = bam_aux_get(rd, "RG");
       if (rgptr == NULL) {
-        // in the case norg exists. dont know if i should trash or put in
+        // in the case norg exists. read will be trashed
         // UNKWOWN
         rname = std::string(bam_get_qname(rd));
         std::cerr << "[No_found_RG] :: " << rname << '\n';
@@ -1677,26 +1730,27 @@ void est_dam_only(general_settings & settings) {
         // moves past the Z by +1. all
         // colons are gone already
         rgname = std::string((const char *)(rgptr + 1));
-        auto match = std::find(rgs.begin(), rgs.end(), rgname);
-        if (match != rgs.end()) {
-          rgname_idx = distance(rgs.begin(), match);
+        auto match = std::find(rgs.rgs.begin(), rgs.rgs.end(), rgname);
+        if (match != rgs.rgs.end()) {
+          rgname_idx = distance(rgs.rgs.begin(), match);
         } else { // in the case it cannot find the rg. The read will be trashed
           trashed++;
           continue;
         }
       }
-   } else {
-     rgname=ALL_RG;
-     rgname_idx=ALL_DEAMMETH_RG_IDX;
-   }
-   d = align_read(rd, ref);
-   add_aligned_data(settings, d,
-                    cpg_data[rgname_idx],
-                    nocpg_data[rgname_idx],
-                    tm[rgname_idx],
-                    cov_rg, rgname_idx,
-                    cycles[rgname_idx],
-                    exclude_CnonCpGs[rgname_idx]);
+    } else {
+      rgname=ALL_RG;
+      rgname_idx=ALL_DEAMMETH_RG_IDX;
+    }
+
+
+    d = align_read(rd, ref);
+    add_aligned_data(settings, d,
+                     cpg_data[rgname_idx],
+                     nocpg_data[rgname_idx],
+                     tm[rgname_idx],
+                     cov_rg, rgname_idx,
+                     rgs.cycles[rgname_idx]);
   }
   time(&end_time_load_data);
 
@@ -1707,45 +1761,45 @@ void est_dam_only(general_settings & settings) {
 
 
   print_log(settings);
-  for (size_t i=0; i<rgs.size(); i++){
-    settings.buffer += "\t-> Total_Observations RG: "+ rgs[i] +
+  for (size_t i=0; i<rgs.n; i++){
+    settings.buffer += "\t-> Total_Observations RG: "+ rgs.rgs[i] +
       " CpG/cnonCpG: " + std::to_string(cov_rg.cpg[i]) + " " + std::to_string(cov_rg.nocpg[i]) +
       " CpGcov: " + std::to_string((double)cov_rg.cpg[i]/(double)cpg_map.size()) + '\n';
     print_log(settings);
   }
 
   // dumping counts to file
-  for (size_t i=0; i<rgs.size(); i++){
-    settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + rgs[i] +  ".tallycounts" + '\n';
+  for (size_t i=0; i<rgs.n; i++){
+    settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + rgs.rgs[i] +  ".tallycounts" + '\n';
     print_log(settings);
-    dump_count_file(settings, tm[i], rgs[i]);
-    tmf[i] = read_count_file(settings, rgs[i]);
+    dump_count_file(settings, tm[i], rgs.rgs[i]);
+    tmf[i] = read_count_file(settings, rgs.rgs[i]);
   }
 
   std::vector<std::vector<double>> param_deam;
-  param_deam.resize(rgs.size());
+  param_deam.resize(rgs.n);
 
   settings.args_stream << std::flush;
-  for (size_t i=0; i<rgs.size(); i++){
+  for (size_t i=0; i<rgs.n; i++){
     // if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
     //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
     //   print_log(settings);
     //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
     //   param_deam[i] = load_deamrates_f(settings);
-    // } else if (check_file_exists(settings.outbase+"."+rgs[i]+".deamrates")){
-    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
+    // } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
+    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
     //   print_log(settings);
-    //   param_deam[i] = load_deamrates(settings, rgs[i]);
+    //   param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
     // }else {
-      settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs[i] + '\n';
+      settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
       print_log(settings);
 #if 1
       print_data(cpg_data[i], nocpg_data[i]);
 #endif
-      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs[i]);
-      settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs[i]+".deamrates" + '\n';
+      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs.rgs[i]);
+      settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
       print_log(settings);
-      param_deam[i] = load_deamrates(settings, rgs[i]);
+      param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
       // }
   }
   std::cerr << "\t-> Cleaning up." << '\n';
