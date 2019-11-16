@@ -18,7 +18,7 @@
 #include "htslib/htslib/hts.h"
 #include "htslib/htslib/sam.h"
 
-// #include "file_handling.hpp"
+#include "file_handling.hpp"
 #include "load_fasta.hpp"
 #include "nucl_conv.hpp"
 #include "myargparser.hpp"
@@ -27,12 +27,10 @@
 
 using v_un_ch = std::vector<unsigned char>;
 
-template <typename T>
-void checkfilehandle(T &fh, std::string filename);
 
-bool check_file_exists(std::string filename);
-void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref);
-void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref);
+// bool check_file_exists(std::string filename);
+// void filter_ref_sites(const std::string & selected_chrom, std::string & filename, char * ref);
+// void filter_ref_bed(const std::string & selected_chrom, std::string & filename, char * ref);
 
 /// STRUCTS
 struct my_cov_rg {
@@ -213,7 +211,7 @@ inline double oplusnatl(const double & x, const double & y );
 template <typename T>
 inline T oplusInitnatl(const T & x,const T & y );
 
-// template <typename T>
+// template <class T>
 // void checkfilehandle(T &fh, std::string filename);
 
 // bool check_file_exists(std::string filename);
