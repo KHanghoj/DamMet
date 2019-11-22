@@ -1,4 +1,36 @@
 #include "myargparser.hpp"
+#include "version.hpp"
+
+
+void print_help(){
+  std::cerr << "\nDamMet (" << DAMMET_VERSION << ") is a software aimed to estimate methylation maps using HTS sequencing "
+    "data underlying ancient samples. The implemented model follows a two-steps procedure. "
+    "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
+    "rates at both methylated and unmethylated cytosine residues. The second step makes use "
+    "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
+  std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
+    "fasta)\n\t->-c (chromosome of interest)" << '\n';
+  std::cerr << "OPTIONS:" << std::endl;
+  std::cerr << "\t-> BED file (-B): " << std::endl;
+  std::cerr << "\t-> minmapQ (-q): " << std::endl;
+  std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
+  std::cerr << "\t-> MinReadLength (-L): " << std::endl;
+  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+  std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
+  std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
+  std::cerr << "\t-> Outbase (-O): " << std::endl;
+  std::cerr << "\t-> readFlags (-F): " << std::endl;
+  std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
+  std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
+  std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
+  std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
+  std::cerr << "\t-> Exclude BED (-e): " << std::endl;
+  std::cerr << "\t-> WindowSize (-W): " << std::endl;
+  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+  exit(EXIT_SUCCESS);
+}
+
+
 
 std::vector<std::string> split_comma_chrom(std::string & chrom){
   std::vector<std::string> res;
@@ -11,11 +43,8 @@ std::vector<std::string> split_comma_chrom(std::string & chrom){
   return res;
 }
 
-
-std::vector<std::string> parse_chrom(std::string & d){
-  if (check_file_exists(d)){
-    return parse_chrom_file(d);
-  } else if (d.find(",") != std::string::npos){
+std::vector<std::string> parse_chrom_str(std::string & d){
+  if (d.find(",") != std::string::npos){
     return split_comma_chrom(d);
   } else {
     std::vector<std::string> res;
@@ -23,125 +52,150 @@ std::vector<std::string> parse_chrom(std::string & d){
     return(res);
   }
 }
-
+  
 void args_parser(int argc, char *argv[], general_settings & settings) {
   int c;
   // : means that an options is expected
 
-  while ((c = getopt(argc, argv, "b:r:c:q:Q:F:E:e:C:P:D:h:O:M:W:N:L:R:B:l:")) != -1) {
-    switch (c) {
-    case 'b':
-      if (optarg)
-        settings.bam_fn = std::string(optarg);
-      break;
-    case 'r':
-      if (optarg)
-        settings.reference_fn = std::string(optarg);
-      break;
-    case 'c':
-      if (optarg)
-        settings.chrom_temp = std::string(optarg);
-      break;
-    // case 'T':
-    //   if (optarg){
-    //     settings.tally_on = atoi(optarg);
-    //   }
-    //   break;
-    case 'q':
-      if (optarg)
-        settings.minmapQ = atoi(optarg);
-      break;
-    case 'Q':
-      if (optarg)
-        settings.minbaseQ = atoi(optarg);
-      break;
-    case 'F':
-      if (optarg)
-	// settings.flags_off = 0;
-        // settings.flags_off = strtol(optarg, 0, 0); // = atoi(optarg);
-	settings.flags_off = atoi(optarg);
-      break;
-    case 'E':
-      if (optarg)
-        settings.exclude_sites_fn = std::string(optarg);
-      break;
-    case 'e':
-      if (optarg)
-        settings.exclude_bed_fn = std::string(optarg);
-      break;
-    case 'C':
-      if (optarg)
-        settings.cycles = atoi(optarg);
-      break;
-    case 'P':
-      // 5 -> 0,1,2,3,4. so 5-1
-      if (optarg)
-        settings.max_pos_to_end = atoi(optarg)-1;
-      break;
-    case 'D':
-      if (optarg){
-        settings.deamrates_filename = std::string(optarg);
-      }
-      break;
-    case 'h':
-      if (optarg){
-        settings.priors_str = std::string(optarg);
-      }
-      break;
-    case 'O':
-      if (optarg){
-        settings.outbase = std::string(optarg);
-      }
-      break;
-    case 'M':
-      if (optarg){
-        // expected fraction of methylated CpG's
-        settings.M = atof(optarg);
-      }
-      break;
-    case 'W':
-      if (optarg){
-        // windowsize
-        settings.windowsize = atol(optarg);
-      }
-      break;
-    case 'N':
-      if (optarg){
-        // windowsize
-        settings.max_cpgs = atoi(optarg);
-      }
-      break;
-    case 'L':
-      if (optarg){
-        // windowsize
-        settings.minreadlength = atoi(optarg);
-      }
-      break;
-    case 'l':
-      if (optarg){
-        // windowsize
-        settings.minreadlength_deam = atoi(optarg);
-      }
-      break;
-    case 'R':
-      if (optarg){
-        // one RG per line file
-        settings.readgroups_f = std::string(optarg);
-      }
-      break;
-    case 'B':
-      if (optarg){
-        // one RG per line file
-        settings.bed_f = std::string(optarg);
-      }
-      break;
-    case '?':
-      std::cerr << "Unknown argument" << '\n';
-      exit(EXIT_FAILURE);
-      break;
-    }
+  if( (argc== 1) ||
+      (argc== 2 && std::string(argv[1]) == "-h") ||
+      (argc== 2 && std::string(argv[1]) == "-help") ||
+      (argc== 2 && std::string(argv[1]) == "--help") ){
+    print_help();
+    exit(EXIT_SUCCESS);
   }
-  
+
+  std::vector<std::string> args;
+  for(int i=1;i<argc;i++){
+    args.push_back(std::string(argv[i]));
+  }
+
+
+  for(auto i=args.begin();i!=args.end();i++){
+    if(*i == "-bam" || *i == "-b" ){
+      i++;
+      if(check_file_exists(*i)){
+        settings.bam_fn = *i;
+      }else{
+        std::cerr << "BAM FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
+    }
+
+    if((*i) == "-ref" || *i == "-r"){
+      i++;
+      if(check_file_exists(*i)){
+        settings.reference_fn = *i;
+      }else{
+        std::cerr << "REFERENCE FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
+    }
+
+    if((*i) == "-c" || *i == "-chrom"){
+      i++;
+      settings.chrom = parse_chrom_str(*i);
+    }
+
+    if((*i) == "-cf" || *i == "--chromfile"){
+      i++;
+      if(check_file_exists(*i)){
+         settings.chrom = parse_chrom_file(*i);
+      }else{
+        std::cerr << "CHROM FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
+    }
+ 
+
+    if((*i) == "-O"){
+      i++;
+      settings.outbase = *i;
+    }
+
+    if((*i) == "-M"){
+      i++;
+      settings.M = std::stof(*i);
+    }
+
+    if((*i) == "-W"){
+      i++;
+      settings.windowsize = std::stol(*i);
+    }
+
+    if((*i) == "-N"){
+      i++;
+      settings.max_cpgs = std::stoi(*i);
+    }
+
+    if((*i) == "-B"){
+      i++;
+      settings.bed_f = *i;
+    }
+   
+    if((*i) == "-q"){
+      i++;
+      settings.minmapQ = std::stoi(*i);
+    }
+
+    if((*i) == "-Q"){
+      i++;
+      settings.minbaseQ = std::stoi(*i);
+    }
+
+    if((*i) == "-F"){
+      i++;
+      settings.flags_off = std::stoi(*i);
+    }
+
+    if((*i) == "-C"){
+      i++;
+      settings.cycles = std::stoi(*i);
+    }
+
+    if((*i) == "-P"){
+      i++;
+      // 5 -> 0,1,2,3,4. so 5-1
+      settings.max_pos_to_end = std::stoi(*i)-1;
+    }
+    
+    if((*i) == "-E" ){
+      i++;
+      settings.exclude_sites_fn = *i;
+    }
+
+    if((*i) == "-e" ){
+      i++;
+      settings.exclude_bed_fn = *i;
+    }
+    
+    if((*i) == "-D" ){
+      i++;
+      settings.deamrates_filename = *i;
+    }
+
+    if((*i) == "-h" ){
+      i++;
+      settings.priors_str = *i;
+    }
+
+    if((*i) == "-L" ){
+      i++;
+      settings.minreadlength = std::stoi(*i);
+    }
+
+    if((*i) == "-l" ){
+      i++;
+      settings.minreadlength_deam = std::stoi(*i);
+    }
+
+    if((*i) == "-R" ){
+      i++;
+      settings.readgroups_f = *i;
+    }
+    
+  }
+
 
   if(settings.M < 0 || settings.M > 1){
     std::cerr << "Fraction of methylated CpGs on the chromosome must be between 0 and 1" << '\n';
@@ -151,7 +205,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   if(settings.outbase.empty()){
     settings.outbase="dammet_res";
     mkdir(settings.outbase.c_str(),0777);
-    // settings.outbase += "/"+settings.chrom;
+    settings.outbase += "/dammet";
   }
 
   if(settings.minmapQ < 1){
@@ -165,12 +219,17 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     settings.minreadlength_deam=settings.minreadlength;
   }
 
-  if(settings.chrom_temp.empty()){
-    std::cerr << "Have to parse chrom (-c) as string,comma-seperated-chroms,chrom-file" << '\n';
-    exit(EXIT_FAILURE);
-  } else {
-    settings.chrom = parse_chrom(settings.chrom_temp);
+
+  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
+      settings.chrom.empty()) {
+    print_help();
   }
+  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
+    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+    std::cerr << "EXITING...." << '\n';
+    exit(EXIT_FAILURE);
+  }
+
   
   std::string ss("");
   ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
