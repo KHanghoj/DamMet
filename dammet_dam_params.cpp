@@ -1549,7 +1549,7 @@ void parse_reads_per_chrom(general_settings & settings,
   uint8_t *rgptr;
   std::string rgname;
   size_t rgname_idx;
-  std::string rname;
+
   time(&start_time_load_data);
   while (sam_itr_next(in, iter, rd) >= 0) {
     skipread = true;
@@ -1587,7 +1587,7 @@ void parse_reads_per_chrom(general_settings & settings,
       if (rgptr == NULL) {
         // in the case norg exists. read will be trashed
         // UNKWOWN
-        rname = std::string(bam_get_qname(rd));
+        std::string rname = std::string(bam_get_qname(rd));
         std::cerr << "[No_found_RG] :: " << rname << '\n';
         trashed++;
         continue;

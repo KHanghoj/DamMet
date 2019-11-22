@@ -27,7 +27,6 @@ void print_help(){
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
   std::cerr << "\t-> WindowSize (-W): " << std::endl;
   std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
-  exit(EXIT_SUCCESS);
 }
 
 
@@ -70,7 +69,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     args.push_back(std::string(argv[i]));
   }
 
-
+  std::string ss("");
   for(auto i=args.begin();i!=args.end();i++){
     if(*i == "-bam" || *i == "-b" ){
       i++;
@@ -80,6 +79,8 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         std::cerr << "BAM FILE DOES NOT EXISTS" << std::endl;
         exit(EXIT_FAILURE);        
       }
+      ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
+        
     }
 
     if((*i) == "-ref" || *i == "-r"){
@@ -90,11 +91,13 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         std::cerr << "REFERENCE FILE DOES NOT EXISTS" << std::endl;
         exit(EXIT_FAILURE);        
       }
+      ss += "\t-> REF (-r): " + settings.reference_fn + '\n';
     }
 
     if((*i) == "-c" || *i == "-chrom"){
       i++;
       settings.chrom = parse_chrom_str(*i);
+      ss += "\t-> Chromosome (-c): " + (*i) + '\n';
     }
 
     if((*i) == "-cf" || *i == "--chromfile"){
@@ -105,42 +108,70 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         std::cerr << "CHROM FILE DOES NOT EXISTS" << std::endl;
         exit(EXIT_FAILURE);        
       }
+      ss += "\t-> Chromosome (-cf): " + (*i) + '\n';
     }
  
 
     if((*i) == "-O"){
       i++;
       settings.outbase = *i;
+      if(settings.outbase.empty()){
+        settings.outbase="dammet_res";
+        mkdir(settings.outbase.c_str(),0777);
+        settings.outbase += "/dammet";
+      }
     }
+
 
     if((*i) == "-M"){
       i++;
       settings.M = std::stof(*i);
+      if(settings.M < 0 || settings.M > 1){
+        std::cerr << "Fraction of methylated CpGs on the chromosome must be a float between 0 and 1" << '\n';
+        exit(EXIT_FAILURE);
+      }
     }
 
     if((*i) == "-W"){
       i++;
       settings.windowsize = std::stol(*i);
+      ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
     }
 
     if((*i) == "-N"){
       i++;
       settings.max_cpgs = std::stoi(*i);
+      ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
     }
 
     if((*i) == "-B"){
       i++;
-      settings.bed_f = *i;
+      if(check_file_exists(*i)){
+        settings.bed_f = *i;
+      }else{
+        std::cerr << "BED FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
+      
+      ss += "\t-> BED file (-B): " + settings.bed_f + '\n';      
     }
    
     if((*i) == "-q"){
       i++;
       settings.minmapQ = std::stoi(*i);
+      if(settings.minmapQ < 1){
+        settings.minmapQ=1;
+      }
+
     }
 
     if((*i) == "-Q"){
       i++;
       settings.minbaseQ = std::stoi(*i);
+      if(settings.minbaseQ < 1){
+        settings.minbaseQ=1;
+      }
+
     }
 
     if((*i) == "-F"){
@@ -161,17 +192,33 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     
     if((*i) == "-E" ){
       i++;
-      settings.exclude_sites_fn = *i;
+      if(check_file_exists(*i)){
+        settings.exclude_sites_fn = *i;
+      }else{
+        std::cerr << "SITES FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
     }
 
     if((*i) == "-e" ){
       i++;
-      settings.exclude_bed_fn = *i;
+      if(check_file_exists(*i)){
+        settings.exclude_bed_fn = *i;
+      }else{
+        std::cerr << "BED FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
     }
     
     if((*i) == "-D" ){
       i++;
-      settings.deamrates_filename = *i;
+      if(check_file_exists(*i)){
+        settings.deamrates_filename = *i;
+      }else{
+        std::cerr << "DEAMRATES FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
+      
     }
 
     if((*i) == "-h" ){
@@ -191,28 +238,28 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
 
     if((*i) == "-R" ){
       i++;
-      settings.readgroups_f = *i;
+      if(check_file_exists(*i)){
+        settings.readgroups_f = *i;
+      }else{
+        std::cerr << "readgroups_f FILE DOES NOT EXISTS" << std::endl;
+        exit(EXIT_FAILURE);        
+      }
     }
     
   }
 
 
-  if(settings.M < 0 || settings.M > 1){
-    std::cerr << "Fraction of methylated CpGs on the chromosome must be between 0 and 1" << '\n';
+  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
+      settings.chrom.empty()) {
+    print_help();
     exit(EXIT_FAILURE);
   }
 
-  if(settings.outbase.empty()){
-    settings.outbase="dammet_res";
-    mkdir(settings.outbase.c_str(),0777);
-    settings.outbase += "/dammet";
-  }
-
-  if(settings.minmapQ < 1){
-    settings.minmapQ=1;
-  }
-  if(settings.minbaseQ < 1){
-    settings.minbaseQ=1;
+  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
+    print_help();
+    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+    std::cerr << "EXITING...." << '\n';
+    exit(EXIT_FAILURE);
   }
 
   if(settings.minreadlength_deam==std::numeric_limits<size_t>::max()){
@@ -220,28 +267,11 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   }
 
 
-  if (settings.bam_fn.empty() || settings.reference_fn.empty() ||
-      settings.chrom.empty()) {
-    print_help();
-  }
-  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
-    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
-    std::cerr << "EXITING...." << '\n';
-    exit(EXIT_FAILURE);
-  }
-
-  
-  std::string ss("");
-  ss += "\t-> BAM (-b): "+settings.bam_fn+'\n';
-  ss += "\t-> REF (-r): " + settings.reference_fn + '\n';
-  ss += "\t-> Chromosome (-c): " + settings.chrom_temp + '\n';
-
-  ss += "\t-> BED file (-B): " + settings.bed_f + '\n';
   ss += "\t-> minmapQ (-q): " + std::to_string(settings.minmapQ) + '\n';
   ss += "\t-> minbaseQ (-Q): " + std::to_string(settings.minbaseQ) + '\n';
   ss += "\t-> MinReadLength (-L): " + std::to_string(settings.minreadlength) + '\n';
   ss += "\t-> MinReadLength_deamrates (-l): " + std::to_string(settings.minreadlength_deam) + '\n';
-  ss += "\t-> Max_Pos_From_End (-P): " + std::to_string(settings.max_pos_to_end+1) + '\n';
+  ss += "\t-> Max_Pos_From_End (-P): " + std::to_string(settings.max_pos_to_end) + '\n';
   ss += "\t-> Expected fraction of methylated CpGs (-M): " + std::to_string(settings.M) + '\n';
   ss += "\t-> Outbase (-O): " + settings.outbase + '\n';
   ss += "\t-> readFlags (-F): " + std::to_string(settings.flags_off) + '\n';
@@ -250,8 +280,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Using readgroups from file (-R): " + settings.readgroups_f + '\n';
   ss += "\t-> Exclude sites (1-based) (-E): " + settings.exclude_sites_fn + '\n';
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
-  ss += "\t-> WindowSize (-W): " + std::to_string(settings.windowsize) + '\n';
-  ss += "\t-> Max CpGs per Window (-N): " + std::to_string(settings.max_cpgs) + '\n';
   
   settings.all_options = ss;
   // std::cerr << '\n' << ss;
