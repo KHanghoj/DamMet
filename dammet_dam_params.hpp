@@ -1,22 +1,8 @@
 #pragma once
-
-#include <algorithm> // find
-#include <cmath>
-#include <fstream>  // open file
-#include <iostream> // stdout/stdin/stderr
-#include <random> // std::normal_distribution;
-#include <signal.h>  // catching signal interrupt
-#include <sstream> //stringstream
-#include <string>
-#include <unordered_map>
-#include <utility> // pair
-#include <memory>
-#include <vector>
-
 #include "zlib.h"
-#include "htslib/htslib/faidx.h"
-#include "htslib/htslib/hts.h"
-#include "htslib/htslib/sam.h"
+#include "htslib/faidx.h"
+#include "htslib/hts.h"
+#include "htslib/sam.h"
 
 #include "file_handling.hpp"
 #include "load_fasta.hpp"
@@ -34,11 +20,12 @@ using v_un_ch = std::vector<unsigned char>;
 
 /// STRUCTS
 struct my_cov_rg {
-  std::vector<size_t> nocpg, cpg;
-  my_cov_rg(size_t & rgs_size){
-    nocpg.resize(rgs_size, 0);
-    cpg.resize(rgs_size, 0);
-  }
+  size_t nocpg=0, cpg=0;
+  // my_cov_rg(size_t & rgs_size){
+  //   nocpg.resize(rgs_size, 0);
+  //   cpg.resize(rgs_size, 0);
+  // }
+  // std::vector<size_t> nocpg, cpg;
 } ;
 
 struct per_site {

@@ -29,8 +29,6 @@ void print_help(){
   std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
 }
 
-
-
 std::vector<std::string> split_comma_chrom(std::string & chrom){
   std::vector<std::string> res;
   std::stringstream ss( chrom );
@@ -53,9 +51,6 @@ std::vector<std::string> parse_chrom_str(std::string & d){
 }
   
 void args_parser(int argc, char *argv[], general_settings & settings) {
-  int c;
-  // : means that an options is expected
-
   if( (argc== 1) ||
       (argc== 2 && std::string(argv[1]) == "-h") ||
       (argc== 2 && std::string(argv[1]) == "-help") ||
@@ -115,11 +110,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     if((*i) == "-O"){
       i++;
       settings.outbase = *i;
-      if(settings.outbase.empty()){
-        settings.outbase="dammet_res";
-        mkdir(settings.outbase.c_str(),0777);
-        settings.outbase += "/dammet";
-      }
     }
 
 
@@ -255,6 +245,14 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     exit(EXIT_FAILURE);
   }
 
+  if(settings.outbase.empty()){
+    settings.outbase="dammet_res";
+    mkdir(settings.outbase.c_str(),0777);
+    settings.outbase += "/dammet";
+    std::cerr << "\t-> output prefix (-O) is set to: " << settings.outbase << '\n';
+  }
+
+  
   if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
     print_help();
     std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
