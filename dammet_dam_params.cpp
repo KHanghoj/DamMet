@@ -19,6 +19,7 @@
 // #include "/home/krishang/Desktop/test2/DamMet/nlopt-2.5.0/install/include/nlopt.h"
 
 int VERBOSE=1;
+int READS = 1e6;
 
 template <typename T>
 void checkfilehandle(T &fh, std::string filename){
@@ -137,12 +138,13 @@ const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
 //   return res;
 // }
 
-const v_un_ch get_cpg_chrom(const char * ref, const size_t & seq_len){
+const v_un_ch get_cpg_chrom(const char * ref, const size_t & seq_len, int &ncpgs){
   v_un_ch res(seq_len, 0);
   for (size_t i=0; i<seq_len-1; i++){
     if ((refToInt[(int)ref[i]] == 1)&&(refToInt[(int)ref[i+1]] == 2)){
       res[i]=1;
       res[i+1]=1;
+      ncpgs++;
     }
   }
   return res;
@@ -476,6 +478,23 @@ unint get_bc(const int & obs, // obs
   } else {
     return 2;
   }
+}
+
+void calc_M_noM(general_settings &settings,
+                const alignment_data &d
+                ){
+
+  // dummy;
+  int ncycles=0;
+
+
+  unint dist_5p, dist_3p;
+  unint pos, prime, bc;
+  unint rl = (d.n_nucleotides == ncycles);
+  double seqerror = 0;
+  size_t boi; // base of interest
+
+
 }
 
 void add_aligned_data(general_settings &settings,
@@ -1483,27 +1502,34 @@ void print_d(pre_calc_per_site & d){
   std::cout << std::flush;
 }
 
+struct read_group_info {
+  std::string rgname;
+  size_t rgname_idx;
+};
+
+
 // This might be faster:
 // https://github.com/samtools/samtools/blob/72d140b590cbacc975e96bf40f3db6e6370a5cbe/bam.c#L77
-int find_rg_idx(bam1_t *rd, rgs_info &rgs, std::string &rgname, size_t &rgname_idx){
-      uint8_t * rgptr = bam_aux_get(rd, "RG");
-      if (rgptr == NULL) {
-        // in the case norg exists. read will be trashed
-        // UNKWOWN
-        std::string rname = std::string(bam_get_qname(rd));
-        std::cerr << "[No_found_RG] :: " << rname << '\n';
-        return -1;
-      } else {
-        // moves past the Z by +1. to get RG id
-        rgname = std::string((const char *)(rgptr + 1));
-        auto match = std::find(rgs.rgs.begin(), rgs.rgs.end(), rgname);
-        if (match != rgs.rgs.end()) {
-          rgname_idx = std::distance(rgs.rgs.begin(), match);
-          return 0;
-        } else { // in the case it cannot find the rg. The read will be trashed
-          return -1;
-        }
-      }
+int find_rg_idx(bam1_t *rd, rgs_info &rgs, read_group_info &read_rg){
+
+  uint8_t * rgptr = bam_aux_get(rd, "RG");
+  if (rgptr == NULL) {
+    // in the case norg exists. read will be trashed
+    // UNKWOWN
+    std::string rname = std::string(bam_get_qname(rd));
+    std::cerr << "[No_found_RG] :: " << rname << '\n';
+    return -1;
+  } else {
+    // moves past the Z by +1. to get RG id
+    read_rg.rgname = std::string((const char *)(rgptr + 1));
+    auto match = std::find(rgs.rgs.begin(), rgs.rgs.end(), read_rg.rgname);
+    if (match != rgs.rgs.end()) {
+      read_rg.rgname_idx = std::distance(rgs.rgs.begin(), match);
+      return 0;
+    } else { // in the case it cannot find the rg. The read will be trashed
+      return -1;
+    }
+  }
 }
 
 struct init_bam_s {
@@ -1608,6 +1634,66 @@ bool check_read_qual(const general_settings &settings, bam1_t *rd){
   return remove;
 }
 
+void mask_sites(general_settings &settings,
+                std::string &chrom,
+                std::unique_ptr<init_ref_s> &ref_s){
+
+  if (!settings.exclude_bed_fn.empty()) {
+    settings.buffer += "\t-> Masking genomic BED regions (-e) " + settings.exclude_bed_fn + '\n';
+    filter_ref_bed(chrom, settings.exclude_bed_fn, ref_s->ref);
+  }
+
+  if (!settings.exclude_sites_fn.empty()) {
+    settings.buffer += "\t-> Masking genomic sites (-E) " + settings.exclude_sites_fn + '\n';
+    filter_ref_sites(chrom, settings.exclude_sites_fn, ref_s->ref);
+  }
+  print_log(settings);
+}
+
+struct read_stats {
+  size_t counter=0, trashed=0, reads_skipped=0;
+};
+
+
+int check_and_align_read(general_settings &settings,
+                         bam1_t *rd,
+                         const v_un_ch &cpg_bool,
+                         char *ref,
+                         rgs_info &rgs,
+                         read_stats &rs,
+                         read_group_info &read_rg,
+                         alignment_data &d){
+
+    if (rs.counter && rs.counter % READS == 0) {
+      std::cerr << "\t-> " << rs.counter << " reads processed and " << rs.trashed << " discarded. " << '\r';
+    }
+    rs.counter++;
+
+    // check that the read overlaps a CpG
+    if(read_overlap_cpg(rd, cpg_bool)){
+      rs.reads_skipped++;
+      return -1;
+    }
+
+    if(check_read_qual(settings, rd)){
+      rs.trashed++;
+      return -1;
+    }
+
+    if (rgs.rg_split) {
+      int r = find_rg_idx(rd, rgs, read_rg);
+      if(r<0){
+        rs.trashed++;
+        return -1;
+      }
+    } else {
+      read_rg.rgname=ALL_RG;
+      read_rg.rgname_idx=ALL_DEAMMETH_RG_IDX;
+    }
+    d=align_read(rd, ref);
+    return 0;
+}
+
 void parse_reads_per_chrom_deamrates(general_settings & settings,
                                      std::string & chrom,
                                      std::vector<std::vector<int>> &tm,
@@ -1618,85 +1704,90 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
 
   std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
   std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
-
-  if (!settings.exclude_bed_fn.empty()) {
-    settings.buffer += "\t-> Masking genomic BED regions (-e) " + settings.exclude_bed_fn + '\n';
-    print_log(settings);
-    filter_ref_bed(chrom, settings.exclude_bed_fn, ref_s->ref);
-  }
-
-  if (!settings.exclude_sites_fn.empty()) {
-    settings.buffer += "\t-> Masking genomic sites (-E) " + settings.exclude_sites_fn + '\n';
-    print_log(settings);
-    filter_ref_sites(chrom, settings.exclude_sites_fn, ref_s->ref);
-  }
-
+  mask_sites(settings, chrom, ref_s);
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref_s->ref, ref_s->seq_len);
-
+  int ncpgs=0;
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
-  const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len);
-  settings.buffer += "\t-> " + std::to_string(cpg_map.size()) + " CpG's in chrom: " + chrom + '\n';
-  print_log(settings);
+  const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
+  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
 
-
-  bam1_t *rd = bam_init1();
+  read_stats rs;
+  read_group_info read_rg;
   alignment_data d;
-  int reads = 1e6;
-  int counter = 0;
-  size_t trashed=0, reads_skipped=0;
+  print_log(settings);
+  bam1_t *rd = bam_init1();
+
   time_t start_time_load_data,end_time_load_data;
-  std::string rgname;
-  size_t rgname_idx;
-
   time(&start_time_load_data);
+
   while (sam_itr_next(bam_s->in, bam_s->iter, rd) >= 0) {
-
-    if (counter % reads == 0 && reads) {
-      std::cerr << "\t-> " << counter << " reads processed and " << trashed << " discarded. " << '\r';
-    }
-    counter++;
-
-    // check that the read overlaps a CpG
-    if(read_overlap_cpg(rd, cpg_bool)){
-      reads_skipped++;
+    int r = check_and_align_read(settings, rd, cpg_bool, ref_s->ref, rgs, rs, read_rg, d);
+    if(r<0)
       continue;
-    }
-
-    if(check_read_qual(settings, rd)){
-      trashed++;
-      continue;
-    }
-
-    if (rgs.rg_split) {
-      int r = find_rg_idx(rd, rgs, rgname, rgname_idx);
-      if(r<0){
-        trashed++;
-        continue;
-      }
-    } else {
-      rgname=ALL_RG;
-      rgname_idx=ALL_DEAMMETH_RG_IDX;
-    }
-
-
-    d = align_read(rd, ref_s->ref);
     add_aligned_data(settings, d,
-                     cpg_data[rgname_idx],
-                     nocpg_data[rgname_idx],
-                     tm[rgname_idx],
-                     cov_rg[rgname_idx],
-                     rgs.cycles[rgname_idx]);
+                     cpg_data[read_rg.rgname_idx],
+                     nocpg_data[read_rg.rgname_idx],
+                     tm[read_rg.rgname_idx],
+                     cov_rg[read_rg.rgname_idx],
+                     rgs.cycles[read_rg.rgname_idx]);
   }
   time(&end_time_load_data);
 
   settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
-    std::to_string(counter)  + ". Reads filtered: " + std::to_string(trashed) +
-    ". Reads skipped (nocpg overlap): " + std::to_string(reads_skipped) +
+    std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
+    ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
     ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
 
   print_log(settings);
   bam_destroy1(rd);
 }
+
+
+void parse_reads_per_chrom_estF(general_settings & settings,
+                                     std::string & chrom,
+                                     // std::vector<std::vector<int>> &tm,
+                                     // std::vector<uni_ptr_obs> &cpg_data,
+                                     // std::vector<uni_ptr_obs> &nocpg_data,
+                                     rgs_info &rgs){
+
+  std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
+  std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
+  mask_sites(settings, chrom, ref_s);
+  const keeplist_map cpg_map = get_cpg_chrom_pos(ref_s->ref, ref_s->seq_len);
+  int ncpgs=0;
+  // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+  const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
+  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
+
+  read_stats rs;
+  read_group_info read_rg;
+  alignment_data d;
+  print_log(settings);
+  bam1_t *rd = bam_init1();
+
+  time_t start_time_load_data,end_time_load_data;
+  time(&start_time_load_data);
+
+  while (sam_itr_next(bam_s->in, bam_s->iter, rd) >= 0) {
+    int r = check_and_align_read(settings, rd, cpg_bool, ref_s->ref, rgs, rs, read_rg, d);
+    if(r<0)
+      continue;
+
+    // do the work here
+    calc_M_noM(settings, d);
+
+  }
+  time(&end_time_load_data);
+
+  settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
+    std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
+    ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
+    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
+
+  print_log(settings);
+  bam_destroy1(rd);
+}
+
 
 void compare_chroms(const general_settings &settings,
                     std::vector<std::string> &chroms,
@@ -1753,8 +1844,8 @@ void chrom_in_bam(const general_settings &settings){
   compare_chroms(settings, ref_names, settings.bam_fn);
 }
 
-void est_dam_only(general_settings & settings) {
-  std::string stream_filename (settings.outbase+".args");
+void estdam(general_settings & settings) {
+  std::string stream_filename (settings.outbase+".estdam.args");
   settings.args_stream.open(stream_filename.c_str());
   checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
   settings.args_stream << settings.all_options;
@@ -1848,8 +1939,44 @@ void est_dam_only(general_settings & settings) {
   settings.args_stream << std::flush;
 }
 
-int est_dam_and_F(general_settings & settings){
-  return 1;
+void estF(general_settings & settings){
+  std::string stream_filename (settings.outbase+".estF.args");
+  settings.args_stream.open(stream_filename.c_str());
+  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
+  settings.args_stream << settings.all_options;
+
+  std::vector<std::pair<size_t, size_t>> bed_coord;
+
+
+  rgs_info rgs;
+
+  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
+    load_rg_from_file(settings, rgs);
+  } else {
+    rgs.rg_split = false;
+    rgs.rgs.push_back(ALL_RG);
+    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
+    if(settings.cycles!=std::numeric_limits<size_t>::max()){
+      rgs.cycles.push_back(settings.cycles);
+      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
+    } else {
+      rgs.cycles.push_back(std::numeric_limits<size_t>::max());
+    }
+    settings.buffer += '\n';
+    rgs.n = 1;
+  }
+
+
+  // load deamination rates from deamrates
+
+  print_log(settings);
+
+  for(auto & c : settings.chrom){
+    parse_reads_per_chrom_estF(settings, c,
+                               rgs);
+  }
+
+
 }
 
 
@@ -1868,9 +1995,9 @@ int main(int argc, char *argv[]) {
 
   // last option should be to get F from est dam only
   if(0){
-    int a=est_dam_and_F(settings);
+    // estF(settings);
   } else {
-    est_dam_only(settings);
+    estdam(settings);
   }
   time(&end_time);
   double time_gone = difftime(end_time, start_time);
