@@ -8,10 +8,14 @@ void print_help(){
     "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
     "rates at both methylated and unmethylated cytosine residues. The second step makes use "
     "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
-  std::cerr << "Three args are required:\n\t->-b (bam)\n\t->-r (reference "
+  std::cerr << "One positional argument is required:\n" << std::endl;
+  std::cerr << "'estdeam' - estimates deamination rates\nor\n'estF' - estimates methylation level (f)" << std::endl;
+  std::cerr << "Three arguments are required:\n\t->-b (bam)\n\t->-r (reference "
     "fasta)\n\t->-c (chromosome of interest)" << '\n';
   std::cerr << "OPTIONS:" << std::endl;
   std::cerr << "\t-> BED file (-B): " << std::endl;
+  std::cerr << "\t-> WindowSize (-W): " << std::endl;
+  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
   std::cerr << "\t-> minmapQ (-q): " << std::endl;
   std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
   std::cerr << "\t-> MinReadLength (-L): " << std::endl;
@@ -25,8 +29,6 @@ void print_help(){
   std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
   std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
-  std::cerr << "\t-> WindowSize (-W): " << std::endl;
-  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
 }
 
 bool check_estF_args(general_settings & settings){
