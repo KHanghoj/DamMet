@@ -18,8 +18,9 @@ std::vector<std::string> parse_chrom_file(std::string & filename);
 struct general_settings{
   std::ofstream args_stream;
   std::string buffer;
+  std::string analysis;
   std::string bam_fn, reference_fn, chrom_temp;
-  std::string exclude_sites_fn, exclude_bed_fn, all_options, outbase, deamrates_filename;
+  std::string exclude_sites_fn, exclude_bed_fn, outbase, deamrates_filename;
   std::string readgroups_f, bed_f, priors_str;
   std::vector<std::string> chrom;
   size_t minmapQ, minbaseQ, max_pos_to_end;
@@ -43,3 +44,5 @@ struct general_settings{
 };
 
 void args_parser( int argc, char* argv[], general_settings & settings );
+void print_help();
+bool check_estF_args(general_settings & settings);

@@ -30,7 +30,7 @@ void checkfilehandle(T &fh, std::string filename){
 }
 
 
-template <class T>
+template <typename T>
 void print_struct(std::unique_ptr<Obs> &data, T & out){
   out << data->pr << " " <<
     data->st << " " <<
@@ -52,8 +52,9 @@ void print_data(uni_ptr_obs &cpg_data,
   }
 }
 
-void print_log(general_settings & settings){
-  std::cerr << settings.buffer;
+void print_log(general_settings & settings, bool to_screen=true){
+  if(to_screen)
+    std::cerr << settings.buffer;
   settings.args_stream << settings.buffer;
   settings.buffer.clear();
 }
@@ -1745,9 +1746,6 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
 
 void parse_reads_per_chrom_estF(general_settings & settings,
                                      std::string & chrom,
-                                     // std::vector<std::vector<int>> &tm,
-                                     // std::vector<uni_ptr_obs> &cpg_data,
-                                     // std::vector<uni_ptr_obs> &nocpg_data,
                                      rgs_info &rgs){
 
   std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
@@ -1758,11 +1756,16 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
   const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
   settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
+  print_log(settings);
 
   read_stats rs;
   read_group_info read_rg;
   alignment_data d;
-  print_log(settings);
+  std::vector<Site> cpg_data;
+  cpg_data.resize(ncpgs);
+
+  // think a bit. need to compute noM and M and remaining dinucl for each read. this should be done in calc_M_noM
+
   bam1_t *rd = bam_init1();
 
   time_t start_time_load_data,end_time_load_data;
@@ -1774,7 +1777,7 @@ void parse_reads_per_chrom_estF(general_settings & settings,
       continue;
 
     // do the work here
-    calc_M_noM(settings, d);
+    calc_M_noM(settings, d, cpg_data);
 
   }
   time(&end_time_load_data);
@@ -1785,6 +1788,10 @@ void parse_reads_per_chrom_estF(general_settings & settings,
     ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
 
   print_log(settings);
+
+  // calc F for this chrom. use the code from get_F.cpp in trash
+
+
   bam_destroy1(rd);
 }
 
@@ -1844,32 +1851,8 @@ void chrom_in_bam(const general_settings &settings){
   compare_chroms(settings, ref_names, settings.bam_fn);
 }
 
-void estdam(general_settings & settings) {
-  std::string stream_filename (settings.outbase+".estdam.args");
-  settings.args_stream.open(stream_filename.c_str());
-  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
-  settings.args_stream << settings.all_options;
-
+void estdeam(general_settings & settings, rgs_info &rgs) {
   std::vector<std::pair<size_t, size_t>> bed_coord;
-
-
-  rgs_info rgs;
-
-  if((!settings.readgroups_f.empty()) && check_file_exists(settings.readgroups_f)){
-    load_rg_from_file(settings, rgs);
-  } else {
-    rgs.rg_split = false;
-    rgs.rgs.push_back(ALL_RG);
-    settings.buffer += "\t-> Merging all reads into a single read group named: " + ALL_RG;
-    if(settings.cycles!=std::numeric_limits<size_t>::max()){
-      rgs.cycles.push_back(settings.cycles);
-      settings.buffer += ". Sequencing cycles: " + std::to_string(settings.cycles);
-    } else {
-      rgs.cycles.push_back(std::numeric_limits<size_t>::max());
-    }
-    settings.buffer += '\n';
-    rgs.n = 1;
-  }
 
   print_log(settings);
 
@@ -1939,13 +1922,60 @@ void estdam(general_settings & settings) {
   settings.args_stream << std::flush;
 }
 
-void estF(general_settings & settings){
-  std::string stream_filename (settings.outbase+".estF.args");
-  settings.args_stream.open(stream_filename.c_str());
-  checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
-  settings.args_stream << settings.all_options;
+void estF(general_settings & settings, rgs_info &rgs){
 
   std::vector<std::pair<size_t, size_t>> bed_coord;
+
+  // load deamination rates from deamrates
+  std::vector<std::vector<double>> param_deam;
+  param_deam.resize(rgs.n);
+  for (size_t i=0; i<rgs.n; i++){
+    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+      settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
+      print_log(settings);
+      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+      param_deam[i] = load_deamrates_f(settings);
+    } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
+      settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
+      print_log(settings);
+      param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
+    } else{
+      std::cerr << "\nCannot find deamination rates. EXITING" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  print_log(settings);
+
+  for(auto & c : settings.chrom){
+    parse_reads_per_chrom_estF(settings, c, rgs);
+  }
+
+
+}
+
+
+int main(int argc, char *argv[]) {
+  time_t start_time, end_time;
+  time(&start_time);
+  general_settings settings;
+  args_parser(argc, argv, settings);
+  if(settings.analysis=="estF"){
+    if(check_estF_args(settings)){
+      print_help();
+      std::cerr << "Must specify either -N (N CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
+      std::cerr << "EXITING...." << '\n';
+      exit(EXIT_FAILURE);
+    }
+
+    std::string stream_filename (settings.outbase+".estF.args");
+    settings.args_stream.open(stream_filename.c_str());
+    checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
+  } else {
+    std::string stream_filename (settings.outbase+".estdeam.args");
+    settings.args_stream.open(stream_filename.c_str());
+    checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
+  }
 
 
   rgs_info rgs;
@@ -1966,44 +1996,30 @@ void estF(general_settings & settings){
     rgs.n = 1;
   }
 
-
-  // load deamination rates from deamrates
-
-  print_log(settings);
-
-  for(auto & c : settings.chrom){
-    parse_reads_per_chrom_estF(settings, c,
-                               rgs);
-  }
-
-
-}
-
-
-int main(int argc, char *argv[]) {
-  time_t start_time, end_time;
-  time(&start_time);
-  general_settings settings;
-  args_parser(argc, argv, settings);
-
-  std::cerr << "\t-> Dammet started: " << ctime(&start_time);
-  // check that chromosome is in .fai file
+  std::cerr << "\t-> DamMet started: " << ctime(&start_time);
+  // check that chromosome is in .fai and .bam
   chrom_in_bam(settings);
   chrom_in_fai(settings);
 
+  // print options to args file
+  print_log(settings, false);
 
-
-  // last option should be to get F from est dam only
-  if(0){
-    // estF(settings);
+  if(settings.analysis=="estF"){
+    settings.buffer += "\t-> Estimating methylation levels (f)\n";
+    print_log(settings);
+    // estF(settings, rgs);
   } else {
-    estdam(settings);
+    settings.buffer += "\t-> Estimating Deamination rates (D)\n";
+    print_log(settings);
+    estdeam(settings, rgs);
   }
+
+
   time(&end_time);
   double time_gone = difftime(end_time, start_time);
   size_t minutes = time_gone / 60.0;
   size_t seconds = (int)time_gone % 60;
   settings.buffer += "\t-> Done in " + std::to_string(minutes)+ ":" + std::to_string(seconds) + " M:S." + '\n';
-  std::cerr << "\t-> Dammet ended: " << ctime(&end_time);
+  std::cerr << "\t-> DamMet ended: " << ctime(&end_time);
   print_log(settings);
 }

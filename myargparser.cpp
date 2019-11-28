@@ -29,6 +29,10 @@ void print_help(){
   std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
 }
 
+bool check_estF_args(general_settings & settings){
+  return (settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty());
+  }
+
 std::vector<std::string> split_comma_chrom(std::string & chrom){
   std::vector<std::string> res;
   std::stringstream ss( chrom );
@@ -59,8 +63,18 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     exit(EXIT_SUCCESS);
   }
 
+
+  if(std::string(argv[1]) == "estdeam"){
+    settings.analysis="estdeam";
+  } else if(std::string(argv[1]) == "estF"){
+    settings.analysis="estF";
+  } else {
+    std::cerr << "first argument must be:\n'estdeam' to estimate deaminations parameters\nOR\n'estF' to obtain methylation estimates" << std::endl;
+    exit(EXIT_FAILURE);    
+  }
+  
   std::vector<std::string> args;
-  for(int i=1;i<argc;i++){
+  for(int i=2;i<argc;i++){
     args.push_back(std::string(argv[i]));
   }
 
@@ -253,12 +267,6 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   }
 
   
-  if(settings.max_cpgs==std::numeric_limits<size_t>::max() && settings.windowsize==std::numeric_limits<size_t>::max() && settings.bed_f.empty()){
-    print_help();
-    std::cerr << "Must specify either -N (max CpGs per window) AND/OR -W (max windowsize) OR -B bedfile" << '\n';
-    std::cerr << "EXITING...." << '\n';
-    exit(EXIT_FAILURE);
-  }
 
   if(settings.minreadlength_deam==std::numeric_limits<size_t>::max()){
     settings.minreadlength_deam=settings.minreadlength;
@@ -279,6 +287,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Exclude sites (1-based) (-E): " + settings.exclude_sites_fn + '\n';
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
   
-  settings.all_options = ss;
+  settings.buffer = ss;
   // std::cerr << '\n' << ss;
 }
+

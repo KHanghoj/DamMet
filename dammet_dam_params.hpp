@@ -112,6 +112,16 @@ struct alignment_data {
 
 using unint = unsigned int;
 
+struct ObsF {
+  ObsF(const double &_M,
+       const double &_noM,
+       const unint &_me
+       ):
+    M(_M), noM(_noM), me(_me){}
+  double M, noM;
+  unint me;
+};
+
 struct Obs {
   Obs(const unint &_pr, // prime 0,1
       const unint &_st, // strand 0,1
@@ -141,16 +151,15 @@ using uni_ptr_obs = std::vector<std::unique_ptr<Obs>>;
 
 
 struct Site {
-  Site(const unint &_chrom,
-       const unint &_pos,
-       const unint &_ref):
-    chrom(_chrom), pos(_pos), ref(_ref){
+  Site(const size_t &_pos):
+    pos(_pos) {
     // data.reserve(20);
-  }
-  int chrom, pos, depth=0;
-  unint ref: 3;  // 0-5 A,C,G,T,N,Del
-  // unint cpg: 1;
-  std::vector<std::unique_ptr<Obs>> data;
+    remaining_dinucl_genotypes.reserve(6);
+  };
+  size_t pos, depth=0;
+  std::vector<double> remaining_dinucl_genotypes;
+  std::vector<ObsF> data;
+
 };
 
 struct rgs_info {
