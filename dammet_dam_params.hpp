@@ -151,9 +151,13 @@ using uni_ptr_obs = std::vector<std::unique_ptr<Obs>>;
 
 
 struct Site {
-  Site(const size_t &_pos):
-    pos(_pos) {
-    // data.reserve(20);
+  // Site(const size_t &_pos):
+  //   pos(_pos) {
+  //   // data.reserve(20);
+  //   remaining_dinucl_genotypes.reserve(6);
+  // };
+
+  Site(){
     remaining_dinucl_genotypes.reserve(6);
   };
   size_t pos, depth=0;

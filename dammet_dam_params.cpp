@@ -482,7 +482,8 @@ unint get_bc(const int & obs, // obs
 }
 
 void calc_M_noM(general_settings &settings,
-                const alignment_data &d
+                const alignment_data &d,
+                std::vector<Site> &cpg_data
                 ){
 
   // dummy;
