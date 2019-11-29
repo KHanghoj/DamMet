@@ -464,3 +464,65 @@ void mark_no_deam_CT_GA(general_settings & settings, std::vector<per_site> & dat
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+double objective_func_F_haploid(const std::vector<double> &x, std::vector<double> &grad, void *my_func_data){
+  F_void *d = static_cast<F_void*>(my_func_data);
+  d->iteration++;
+  double res, ll=0;
+  double noM, M;
+  double mape;
+  if(!grad.empty()){
+    grad[0] = 0;
+  }
+  pre_calc_per_site * site;
+  for (const auto idx : d->mle_data->idx_to_include){
+    site = &d->data->at(idx);
+    for (size_t i=0; i < site->depth; i++){
+      noM =  site->pre_noM[i];
+      M = site->pre_M[i];
+      mape = site->maperrors[i];
+      res = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*BASE_FREQ_FLAT_PRIOR;
+      ll += std::log(res);
+      // wolfram: derivative  ln((1-w)*((1-x) * k + (x * h)) + w*p)
+      // slope += ((1-mape) * (M - noM)) / ((mape-1) * ((f-1) * noM - f * M) + mape*BASE_FREQ_FLAT_PRIOR);
+      // beloved wolfram got it right, just modified a few things for readability
+      if(!grad.empty()){
+        grad[0] += ((1-mape) * (M - noM)) / res;
+      }
+      // https://www.symbolab.com/
+      // wolfram: second derivative ln((1-w)*((1-x) * k + (x * h)) + w*p)
+      // second derivative:
+      // second_der += (std::pow((1-mape),2) * std::pow((M - noM),2)) / std::pow((-M * (mape-1) * f + noM * (mape-1) * (1-f) + mape*BASE_FREQ_FLAT_PRIOR), 2);
+    }
+  }
+  return ll;
+}
+
+double objective_func_F_second_deriv_haploid(const double & f, std::vector<pre_calc_per_site> & data, per_mle_run &mle_data){
+  double slope=0;
+  double nominator, denominator;
+  double noM, M;
+  double mape;
+  pre_calc_per_site * site;
+  for (const auto idx : mle_data.idx_to_include){
+    site = &data.at(idx);
+    for (size_t i=0; i < site->depth; i++){
+      noM =  site->pre_noM[i];
+      M = site->pre_M[i];
+      mape = site->maperrors[i];
+      nominator = std::pow((-mape + 1 ), 2) * std::pow((M - noM ), 2);
+      denominator = std::pow((1-mape) * (noM * (1-f) + f * M) + mape*BASE_FREQ_FLAT_PRIOR, 2);
+      slope += -nominator/denominator;
+    }
+  }
+  return slope;
+}

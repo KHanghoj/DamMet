@@ -83,19 +83,20 @@ struct pre_calc_per_site {
 } ;
 
 
-struct per_mle_run {
-  std::vector<size_t> idx_to_include, positions;
+struct per_mle_run_backup {
+  std::vector<size_t> idx_to_include; // , positions;
   size_t total_depth, min_pos, max_pos, curr_pos, n_cpgs;
-  per_mle_run (const pre_calc_per_site & d, const size_t & idx){
+  per_mle_run_backup (const pre_calc_per_site & d, const size_t & idx){
     n_cpgs = 1;
     idx_to_include.push_back(idx);
-    positions.push_back(d.position);
+    // positions.push_back(d.position);
     total_depth = d.depth;
     min_pos = d.position;
     max_pos = d.position;
     curr_pos = d.position;
   }
 } ;
+
 
 
 struct alignment_data {
@@ -115,11 +116,11 @@ using unint = unsigned int;
 struct ObsF {
   ObsF(const double &_M,
        const double &_noM,
-       const unint &_me
+       const double &_me
        ):
     M(_M), noM(_noM), me(_me){}
   double M, noM;
-  unint me;
+  double me;
 };
 
 struct Obs {
@@ -150,21 +151,56 @@ struct Obs {
 using uni_ptr_obs = std::vector<std::unique_ptr<Obs>>;
 
 
-struct Site {
-  // Site(const size_t &_pos):
-  //   pos(_pos) {
-  //   // data.reserve(20);
-  //   remaining_dinucl_genotypes.reserve(6);
-  // };
+struct Site_s {
+  Site_s(){
+    remaining_dinucl_genotypes.resize(6, 0);
+  };
 
-  Site(){
-    remaining_dinucl_genotypes.reserve(6);
+  void load_data(const double &_M, const double &_noM, const double &_me){
+    data.push_back(ObsF(_M, _noM, _me));
+    depth++;
   };
   size_t pos, depth=0;
   std::vector<double> remaining_dinucl_genotypes;
   std::vector<ObsF> data;
 
 };
+
+struct per_mle_run {
+  std::vector<std::unique_ptr<Site_s>> to_include; // , positions;
+  std::vector<size_t> positions;
+  Site_s center_site;
+  size_t total_depth, min_pos, max_pos, curr_pos, n_cpgs;
+  per_mle_run (const Site_s & _d){
+    n_cpgs = 1;
+    to_include.emplace_back(std::make_unique<Site_s>(_d));
+    center_site = _d;
+    // positions.push_back(d.position);
+    total_depth = _d.depth;
+    min_pos = _d.pos;
+    max_pos = _d.pos;
+    curr_pos = _d.pos;
+  };
+
+  void update_left(const Site_s & _d){
+    min_pos = _d.pos;
+    stats_update(_d);
+  }
+
+  void update_right(const Site_s & _d){
+    max_pos = _d.pos;
+    stats_update(_d);
+  }
+
+  void stats_update(const Site_s & _d){
+    to_include.emplace_back(std::make_unique<Site_s>(_d));
+    positions.push_back(_d.pos);
+    total_depth += _d.depth;
+    n_cpgs++;
+  }
+
+} ;
+
 
 struct rgs_info {
   bool rg_split=false;
@@ -190,13 +226,11 @@ struct deamrates_void {
 
 struct F_void {
   general_settings * settings;
-  std::vector<pre_calc_per_site> * data;
-  per_mle_run * mle_data;
+  std::vector<std::unique_ptr<Site_s>> to_include;
   size_t iteration;
-  F_void(general_settings * s, std::vector<pre_calc_per_site> * d, per_mle_run * m){
-    settings = s;
-    data = d;
-    mle_data = m;
+  F_void(general_settings * _s, std::vector<std::unique_ptr<Site_s>> & _m){
+    settings = _s;
+    to_include = std::move(_m);
     iteration = 0;
   }
 };

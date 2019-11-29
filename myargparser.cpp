@@ -9,7 +9,7 @@ void print_help(){
     "rates at both methylated and unmethylated cytosine residues. The second step makes use "
     "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
   std::cerr << "One positional argument is required:\n" << std::endl;
-  std::cerr << "'estdeam' - estimates deamination rates\nor\n'estF' - estimates methylation level (f)" << std::endl;
+  std::cerr << "'estDEAM' - estimates deamination rates\nor\n'estF' - estimates methylation level (f)" << std::endl;
   std::cerr << "Three arguments are required:\n\t->-b (bam)\n\t->-r (reference "
     "fasta)\n\t->-c (chromosome of interest)" << '\n';
   std::cerr << "OPTIONS:" << std::endl;
@@ -66,12 +66,12 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   }
 
 
-  if(std::string(argv[1]) == "estdeam"){
-    settings.analysis="estdeam";
+  if(std::string(argv[1]) == "estDEAM"){
+    settings.analysis="estDEAM";
   } else if(std::string(argv[1]) == "estF"){
     settings.analysis="estF";
   } else {
-    std::cerr << "first argument must be:\n'estdeam' to estimate deaminations parameters\nOR\n'estF' to obtain methylation estimates" << std::endl;
+    std::cerr << "first argument must be:\n'estDEAM' to estimate deaminations parameters\nOR\n'estF' to obtain methylation estimates" << std::endl;
     exit(EXIT_FAILURE);    
   }
   

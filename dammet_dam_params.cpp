@@ -481,22 +481,186 @@ unint get_bc(const int & obs, // obs
   }
 }
 
+size_t get_param_idx(const size_t & max_pos_to_end, const size_t & meth, const size_t & pos_to_end, const size_t & prime){
+  return (meth * PRIMES * ( max_pos_to_end+2 ) + pos_to_end * PRIMES  + prime);
+}
+
+double base_condition_one_genotype(const unint &strand, const double &deam,
+                                   const double &seqerror, const unint &base,
+                                   const size_t &geno) {
+  // - (strand==1 for reverse)
+  // + (strand==0 for forward)
+  // A->0; C->1; G->2; T->3
+  double res;
+  if ((strand==1 && geno == 2 && base == 2) ||
+      (strand==0 && geno == 1 && base == 1)) {
+    // - 2 2 or + 1 1
+    res = ((1 - deam) * (1 - seqerror)) + (deam * seqerror / 3) +
+          (seqerror * seqerror / 3);
+
+  } else if ((strand==1 && geno == 2 && base == 0) ||
+             (strand==0 && geno == 1 && base == 3)) {
+    // - 2 0 or + 1 3
+    res = (deam * (1 - seqerror)) + ((1 - deam) * seqerror / 3) +
+          (seqerror * seqerror / 3);
+    // std::cerr << strand << " " << geno << " " << base << " " << " " << deam << " " << res  << std::endl;
+  } else {
+    // the rest
+    if (geno == base) {
+      res = (1 - seqerror) + (seqerror * seqerror / 3);
+    } else {
+      res = (seqerror / 3) + (seqerror * seqerror / 3);
+    }
+  }
+  return res;
+}
+
+double base_condition_both_gts(const unint &strand, const double &dam,
+                               const double &s1, const unint &b1,
+                               const double &s2, const unint &b2,
+                               const dinucl_pair_of_pair &g){
+  double prob_g1 =
+    0.5 * base_condition_one_genotype(strand, dam, s1,
+                                      b1, g.first.first) +
+    0.5 * base_condition_one_genotype(strand, dam, s1,
+                                      b1, g.first.second);
+  double prob_g2 =
+    0.5 * base_condition_one_genotype(strand, dam, s2,
+                                      b2, g.second.first) +
+    0.5 * base_condition_one_genotype(strand, dam, s2,
+                                      b2, g.second.second);
+  return prob_g1 * prob_g2;
+}
+
 void calc_M_noM(general_settings &settings,
                 const alignment_data &d,
-                std::vector<Site> &cpg_data
-                ){
-
-  // dummy;
-  int ncycles=0;
-
+                const keeplist_map &cpg_map,
+                size_t &ncycles,
+                my_cov_rg &cov_rg,
+                std::vector<double> deam,
+                std::vector<Site_s> &cpg_data){
 
   unint dist_5p, dist_3p;
-  unint pos, prime, bc;
+  unint pos, prime;
+  unint base1, base2;
   unint rl = (d.n_nucleotides == ncycles);
-  double seqerror = 0;
+  double seqerror1, seqerror2;
+  double mapq = PHRED_TO_PROB_CONVERTER[d.mapQ];
+  size_t cpg_idx;
   size_t boi; // base of interest
 
+  double  prob_g1, prob_g2;
+  double deamin_methylated, deamin_unmethylated;
+  double noM, M;
 
+  Site_s *s;
+
+  bool anydata;
+
+  for (size_t i = 0; i < d.t_seq.size()-1; i++){
+    anydata = false;
+    if (d.strand){ // true for negative strand
+      boi = d.t_seq.size()-i-1; // closest to 5 prime
+      if(check_base_quality(settings, d, boi-1, boi))
+        continue;
+
+      if(no_ref_cpg(d.t_ref[boi-1], d.t_ref[boi]))
+        continue;
+
+      dist_5p = d.t_isop[boi];
+      dist_3p = d.t_posi[boi];
+      get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
+
+      // if read == number of cycles. use the postions relative to the 5 prime.
+      if (prime==1 && rl)
+        get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+
+
+      seqerror1 = PHRED_TO_PROB_CONVERTER[d.t_qs[boi-1]];
+      seqerror2 = PHRED_TO_PROB_CONVERTER[d.t_qs[boi]];
+      base1 = d.t_seq[boi-1];
+      base2 = d.t_seq[boi];
+#if 0
+      std::cerr << d.t_positions[boi-1] << '\n';
+#endif
+      cpg_idx = cpg_map.at(d.t_positions[boi-1]);
+
+      s = &cpg_data[cpg_idx];
+      cov_rg.cpg++;
+      anydata=true;
+    } else {
+      boi = i; // closest to 5 prime
+      if(check_base_quality(settings, d, boi, boi+1))
+        continue;
+
+      if(no_ref_cpg(d.t_ref[boi], d.t_ref[boi+1]))
+        continue;
+
+      dist_5p = d.t_posi[boi];
+      dist_3p = d.t_isop[boi];
+      get_pos_and_prime(settings, dist_3p, dist_5p, pos, prime);
+
+      // if read == number of cycles. use the postions relative to the 5 prime.
+      if (prime==1 && rl)
+        get_pos_and_prime(settings, dist_5p*10, dist_5p, pos, prime);
+
+      seqerror1 = PHRED_TO_PROB_CONVERTER[d.t_qs[boi]];
+      seqerror2 = PHRED_TO_PROB_CONVERTER[d.t_qs[boi+1]];
+      base1 = d.t_seq[boi];
+      base2 = d.t_seq[boi+1];
+
+      cpg_idx = cpg_map.at(d.t_positions[boi]);
+      s = &cpg_data[cpg_idx];
+      cov_rg.cpg++;
+      anydata=true;
+    }
+
+    if(anydata){
+#if 0
+      std::cerr << cpg_idx <<  " dingdong " << cov_rg.cpg << '\n';
+#endif
+
+#if 0
+      std::cerr << pos << " " << prime << " " << d.strand << " " <<
+        seqerror1 << " " << base1 << " " <<
+        seqerror2 << " " << base2 << "\n";
+#endif
+
+
+      deamin_unmethylated = deam[get_param_idx(settings.max_pos_to_end, UNMETHSTATE, pos, prime)];
+      noM = base_condition_both_gts(d.strand,
+                                    deamin_unmethylated,
+                                    seqerror1, base1,
+                                    seqerror2, base2,
+                                    SEVEN_DINUCL_GENOTYPES[0]);
+
+      deamin_methylated = deam[get_param_idx(settings.max_pos_to_end, METHSTATE, pos, prime)];
+      M = base_condition_both_gts(d.strand,
+                                  deamin_methylated,
+                                  seqerror1, base1,
+                                  seqerror2, base2,
+                                  SEVEN_DINUCL_GENOTYPES[0]);
+
+      s->load_data(M, noM, mapq);
+#if 0
+      std::cerr << M << " " << noM << " " << s->depth << '\n';
+#endif
+
+      for (size_t dinucl_idx=1; dinucl_idx<SEVEN_DINUCL_GENOTYPES.size(); dinucl_idx++){
+        double gt_it = base_condition_both_gts(d.strand,
+                                               deamin_unmethylated,
+                                               seqerror1, base1,
+                                               seqerror2, base2,
+                                               SEVEN_DINUCL_GENOTYPES[dinucl_idx]);
+
+        s->remaining_dinucl_genotypes[dinucl_idx-1] +=
+          std::log((1-mapq) * (gt_it) + mapq * DINUCL_FLAT_PRIOR);
+#if 0
+        std::cerr << s->remaining_dinucl_genotypes[dinucl_idx-1] << "\n";
+#endif
+      }
+    }
+  }
 }
 
 void add_aligned_data(general_settings &settings,
@@ -589,9 +753,6 @@ void add_aligned_data(general_settings &settings,
   }
 }
 
-size_t get_param_idx(const size_t & max_pos_to_end, const size_t & meth, const size_t & pos_to_end, const size_t & prime){
-  return (meth * PRIMES * ( max_pos_to_end+2 ) + pos_to_end * PRIMES  + prime);
-}
 
 template <class T>
 void print_single_array_parameters(const size_t & max_pos_to_end, std::vector<double> & param, T & out){
@@ -864,72 +1025,19 @@ std::vector<double> load_deamrates_f(general_settings & settings){
   return res;
 }
 
-void update_mle_data(per_mle_run & mle_data, const pre_calc_per_site & data, size_t & idx){
-  mle_data.idx_to_include.push_back(idx);
-  mle_data.total_depth += data.depth;
-  mle_data.positions.push_back(data.position);
-  mle_data.n_cpgs++;
-  if (mle_data.min_pos > data.position) {
-    mle_data.min_pos = data.position;
-  } else if (mle_data.max_pos < data.position) {
-    mle_data.max_pos = data.position;
-  } else {
-    std::cerr << mle_data.curr_pos << " " << mle_data.min_pos << " " << mle_data.max_pos << " NOT GOOD POSITION " << data.position << '\n';
-  }
-}
-
-double objective_func_F_haploid(const std::vector<double> &x, std::vector<double> &grad, void *my_func_data){
-  F_void *d = static_cast<F_void*>(my_func_data);
-  d->iteration++;
-  double res, ll=0;
-  double noM, M;
-  double mape;
-  if(!grad.empty()){
-    grad[0] = 0;
-  }
-  pre_calc_per_site * site;
-  for (const auto idx : d->mle_data->idx_to_include){
-    site = &d->data->at(idx);
-    for (size_t i=0; i < site->depth; i++){
-      noM =  site->pre_noM[i];
-      M = site->pre_M[i];
-      mape = site->maperrors[i];
-      res = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*BASE_FREQ_FLAT_PRIOR;
-      ll += std::log(res);
-      // wolfram: derivative  ln((1-w)*((1-x) * k + (x * h)) + w*p)
-      // slope += ((1-mape) * (M - noM)) / ((mape-1) * ((f-1) * noM - f * M) + mape*BASE_FREQ_FLAT_PRIOR);
-      // beloved wolfram got it right, just modified a few things for readability
-      if(!grad.empty()){
-        grad[0] += ((1-mape) * (M - noM)) / res;
-      }
-      // https://www.symbolab.com/
-      // wolfram: second derivative ln((1-w)*((1-x) * k + (x * h)) + w*p)
-      // second derivative:
-      // second_der += (std::pow((1-mape),2) * std::pow((M - noM),2)) / std::pow((-M * (mape-1) * f + noM * (mape-1) * (1-f) + mape*BASE_FREQ_FLAT_PRIOR), 2);
-    }
-  }
-  return ll;
-}
-
-double objective_func_F_second_deriv_haploid(const double & f, std::vector<pre_calc_per_site> & data, per_mle_run &mle_data){
-  double slope=0;
-  double nominator, denominator;
-  double noM, M;
-  double mape;
-  pre_calc_per_site * site;
-  for (const auto idx : mle_data.idx_to_include){
-    site = &data.at(idx);
-    for (size_t i=0; i < site->depth; i++){
-      noM =  site->pre_noM[i];
-      M = site->pre_M[i];
-      mape = site->maperrors[i];
-      nominator = std::pow((-mape + 1 ), 2) * std::pow((M - noM ), 2);
-      denominator = std::pow((1-mape) * (noM * (1-f) + f * M) + mape*BASE_FREQ_FLAT_PRIOR, 2);
-      slope += -nominator/denominator;
-    }
-  }
-  return slope;
-}
+// void update_mle_data(per_mle_run & mle_data, const pre_calc_per_site & data, size_t & idx){
+//   mle_data.idx_to_include.push_back(idx);
+//   mle_data.total_depth += data.depth;
+//   mle_data.positions.push_back(data.position);
+//   mle_data.n_cpgs++;
+//   if (mle_data.min_pos > data.position) {
+//     mle_data.min_pos = data.position;
+//   } else if (mle_data.max_pos < data.position) {
+//     mle_data.max_pos = data.position;
+//   } else {
+//     std::cerr << mle_data.curr_pos << " " << mle_data.min_pos << " " << mle_data.max_pos << " NOT GOOD POSITION " << data.position << '\n';
+//   }
+// }
 
 
 double objective_func_F(const std::vector<double> &x, std::vector<double> &grad, void *my_func_data){
@@ -940,20 +1048,25 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
   double read_like, log_like_genos ;
   double noM, M, mape ;
   double log_like_window=0;
+
+
+
   if(!grad.empty()){
     grad[0] = 0;
   }
-  pre_calc_per_site * site;
-  for (const auto & idx : d->mle_data->idx_to_include){
-    site = &d->data->at(idx);
+  for (auto & site : d->to_include){
+
+  // pre_calc_per_site * site;
+  // for (const auto & idx : d->mle_data->idx_to_include){
+    // site = &d->data->at(idx);
     log_like_cgcg_geno = 0;
     reads_grad = 0;
     geno_grad = 0;
     log_like_genos = 0;
-    for (size_t i=0; i < site->depth; i++){
-      noM =  site->pre_noM[i];
-      M = site->pre_M[i];
-      mape = site->maperrors[i];
+    for (auto &obs : site->data){
+      noM =  obs.noM;
+      M = obs.M;
+      mape = obs.me;
       read_der = (1-mape) * (M - noM);
       read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*DINUCL_FLAT_PRIOR;
       log_like_cgcg_geno += std::log(read_like);
@@ -988,423 +1101,232 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
   return log_like_window;
 }
 
-double loglikelihood_after_mle(const std::vector<double> &x, pre_calc_per_site * site){
-  double log_like_cgcg_geno=0;
-  double read_like ;
-  double noM, M, mape ;
-  for (size_t i=0; i < site->depth; i++){
-    noM =  site->pre_noM[i];
-    M = site->pre_M[i];
-    mape = site->maperrors[i];
-    read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*DINUCL_FLAT_PRIOR;
-    log_like_cgcg_geno += std::log(read_like);
-  }
-  return log_like_cgcg_geno + LOG_PRIORS[0];
+void setup_mma(nlopt::opt &opt){
+  std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
+
+  opt.set_maxeval(1000);
+  opt.set_lower_bounds(lb);
+  opt.set_upper_bounds(up);
+  opt.set_xtol_abs(0);
+  opt.set_ftol_abs(1e-15);
+  opt.set_xtol_rel(0);
+  opt.set_ftol_rel(0);
+
 }
 
-double objective_func_F_second_deriv(const double & f, std::vector<pre_calc_per_site> & data, per_mle_run &mle_data){
-  double total_d2=0;
-  // double nominator, denominator;
-  double log_like_cgcg_geno;
-  double reads_grad, geno_grad;
-  double read_der, read_like, log_like_genos ;
-  double noM, M;
-  double mape;
-  double numerator_read_der2, denominator_read_der2, reads_der2;
-  double geno_grad_der2, like_genos, like_genos_der2;
-  pre_calc_per_site * site;
-  for (const auto & idx : mle_data.idx_to_include){
-    site = &data.at(idx);
-    log_like_cgcg_geno = 0;
-    reads_grad=0;
-    reads_der2=0;
-    for (size_t i=0; i < site->depth; i++){
-      noM =  site->pre_noM[i];
-      M = site->pre_M[i];
-      mape = site->maperrors[i];
+void run_mle(general_settings & settings,
+             std::string & chrom,
+             std::vector<Site_s> & cpg_data) {
 
-      read_der = (1-mape) * (M - noM);
-      read_like = (1-mape) * ((1-f) * noM + f * M) + mape*DINUCL_FLAT_PRIOR;
-      reads_grad += read_der/read_like;
+  std::string filename = settings.outbase + "." + chrom + ".F";
+  settings.buffer += "\t-> Dumping MLE of F to " + filename + '\n';
+  print_log(settings);
+  std::ofstream f (filename.c_str());
+  checkfilehandle<std::ofstream>(f, filename);
 
-      numerator_read_der2 = std::pow((1-mape),2) * std::pow((M - noM),2);
-      denominator_read_der2 = std::pow((1-mape) * (noM * (1-f) + f * M) + mape*DINUCL_FLAT_PRIOR, 2);
-      reads_der2 += - (numerator_read_der2 / denominator_read_der2);
-      // \frac{\partial }{\partial \:x^2}\left(ln\left(\left(1-w\right)\cdot \left(\left(1-x\right)\:\cdot \:n\:+\:\left(x\:\cdot \:M\right)\right)\:+\:w\cdot \:p\right)\:\:\right)
+  std::set<size_t> last_positions_set;
 
-      log_like_cgcg_geno += std::log(read_like);
-      // https://www.symbolab.com/
-      // wolfram: second derivative ln((1-w)*((1-x) * k + (x * h)) + w*p)
-      // second derivative:
-      // second_der += (std::pow((1-mape),2) * std::pow((M - noM),2)) / std::pow((-M * (mape-1) * f + noM * (mape-1) * (1-f) + mape*DINUCL_FLAT_PRIOR), 2);
+  double last_minf;
+  std::vector<double>  last_param;
+  nlopt::result last_result;
+  double last_error;
+  size_t last_iterations;
+
+  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
+  nlopt::opt opt(nlopt::LD_MMA, 1);
+  setup_mma(opt);
+
+  for (size_t curr_idx = 0; curr_idx < cpg_data.size(); curr_idx++) {
+    per_mle_run mle_run(cpg_data[curr_idx]);
+
+
+    size_t pos_to_left = (curr_idx > 0) ? curr_idx - 1 : 0;
+    size_t pos_to_right = curr_idx + 1;
+    bool can_go_left = false, can_go_right = false;
+    // keep adding sites to mle_run until we fulfill the requirements
+    while (mle_run.max_pos-mle_run.min_pos < settings.windowsize && mle_run.n_cpgs < settings.max_cpgs) {
+      can_go_right = false;
+      can_go_left = false;
+
+      if (pos_to_right < cpg_data.size() - 1) {
+        can_go_right = true;
+      }
+
+      if (pos_to_left >= 1) {
+        can_go_left = true;
+      }
+
+      if(std::max(mle_run.max_pos, mle_run.min_pos) - cpg_data[pos_to_left].pos > settings.windowsize){
+        can_go_left = false;
+      }
+
+      if(cpg_data[pos_to_right].pos - std::min(mle_run.max_pos, mle_run.min_pos) > settings.windowsize){
+        can_go_right = false;
+      }
+
+      if (!can_go_right && !can_go_left) {
+        // break ;; cannot extend anymore
+        break;
+
+      } else if (can_go_right && !can_go_left) {
+        // take the one to the right
+        mle_run.update_right(cpg_data[pos_to_right]);
+        //update_mle_run(mle_run, cpg_data[pos_to_right], pos_to_right);
+        pos_to_right++;
+      } else if (!can_go_right && can_go_left) {
+        // take the one to the left
+        mle_run.update_left(cpg_data[pos_to_left]);
+        // update_mle_run(mle_run, cpg_data[pos_to_left], pos_to_left);
+        pos_to_left--;
+      } else if (can_go_right && can_go_left) {
+        // take the closest
+        if (cpg_data[pos_to_right].pos - mle_run.curr_pos <=
+            mle_run.curr_pos - cpg_data[pos_to_left].pos) {
+          // take the one to the right
+          mle_run.update_right(cpg_data[pos_to_right]);
+          pos_to_right++;
+          // update_mle_run(mle_run, cpg_data[pos_to_right], pos_to_right);
+          // pos_to_right++;
+        } else {
+          // take the one to the left
+          mle_run.update_left(cpg_data[pos_to_left]);
+          pos_to_left--;
+          // update_mle_run(mle_run, cpg_data[pos_to_left], pos_to_left);
+          // pos_to_left--;
+        }
+      } else {
+        // we are screwed. should not be possible
+      }
+
+    } // end while loop
+
+    // here we can check if the results are identical to last time, then we dont need to do anything besides printing.
+    // see below for the old code where we re calculate every time
+    bool same = false;
+    if(!last_positions_set.empty() && mle_run.n_cpgs==last_positions_set.size()){
+      same=true;
+      for(auto &val: mle_run.positions){
+        if(last_positions_set.count(val)!=1){
+          same=false;
+          break;
+        }
+      }
     }
-    // exp(log_like_cgcg_geno + LOG_PRIORS) * d/df all_reads. this is only including cgcg as the derivatives of the remaining are 0 as they are unrelated to F.
 
-    //g(x) first derivative     z(x)                              y(x)
-    geno_grad = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_grad;
-
-    // g'(x) (of the first derivative) -> z(x)*y'(x) + z'(x) * y(x)
-    geno_grad_der2 = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_der2 + (geno_grad * reads_grad);
-    log_like_genos = log_like_cgcg_geno + LOG_PRIORS[0];
-    // summation of the likelihood of the remaining genotypes
-    for (auto it=site->remaining_dinucl_genotypes.begin(); it!=site->remaining_dinucl_genotypes.end(); it++){
-       log_like_genos = oplusnatl(log_like_genos, *it);
+    if(!same){
+      last_positions_set.clear();
+      last_positions_set.insert(mle_run.positions.begin(), mle_run.positions.end());
     }
 
-    // f(x) first derivative is 1/below
-    like_genos = std::exp(log_like_genos);
-    // f'(x) of the first derivative
-    like_genos_der2 = (- 1.0/(std::pow(like_genos,2))) * geno_grad;
+    double minf;
+    F_void void_stuff(&settings, mle_run.to_include);
+    std::vector<double> param (1, SMALLTOLERANCE);
+    nlopt::result result;
+    double second_der, error;
+    size_t iterations;
 
-    //             f'(x)           g(x)           f(x)              g'(x)
-    total_d2 += like_genos_der2 * geno_grad + (1.0/like_genos) * geno_grad_der2;
-  }
-  return total_d2;
-}
+    if(! same){
+      opt.set_max_objective(objective_func_F, &void_stuff);
+      result = opt.optimize(param, minf);
+#if 0
+      second_der = objective_func_F_second_deriv(param[0], cpg_data, mle_run);
+      error = 1.96/std::sqrt(-second_der);
+#else
+      second_der =0;
+      error =0;
+#endif
+      iterations=void_stuff.iteration;
 
-
-// void run_mle(general_settings & settings,
-//              std::vector<pre_calc_per_site> & pre_calc_data) {
-//   std::string filename = settings.outbase + ".F";
-//   std::ofstream f (filename.c_str());
-//   checkfilehandle<std::ofstream>(f, filename);
-
-//   std::set<size_t> last_positions_set;
-
-//   double last_minf;
-//   std::vector<double>  last_param;
-//   nlopt::result last_result;
-//   double last_error;
-//   size_t last_iterations;
-
-//   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
-//   nlopt::opt opt(nlopt::LD_MMA, 1);
-//   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
-
-//   opt.set_maxeval(1000);
-//   opt.set_lower_bounds(lb);
-//   opt.set_upper_bounds(up);
-//   opt.set_xtol_abs(0);
-//   opt.set_ftol_abs(1e-15);
-//   opt.set_xtol_rel(0);
-//   opt.set_ftol_rel(0);
-//   for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
-//     per_mle_run mle_data(pre_calc_data[curr_idx], curr_idx);
-//     size_t pos_to_left = (curr_idx > 0) ? curr_idx - 1 : 0;
-//     size_t pos_to_right = curr_idx + 1;
-//     bool can_go_left = false, can_go_right = false;
-//     // keep adding sites to mle_data until we fulfill the requirements
-//     while (mle_data.max_pos-mle_data.min_pos < settings.windowsize && mle_data.n_cpgs < settings.max_cpgs) {
-//       can_go_right = false;
-//       can_go_left = false;
-
-//       if (pos_to_right < pre_calc_data.size() - 1) {
-//         can_go_right = true;
-//       }
-
-//       if (pos_to_left >= 1) {
-//         can_go_left = true;
-//       }
-
-//       if(std::max(mle_data.max_pos, mle_data.min_pos) - pre_calc_data[pos_to_left].position > settings.windowsize){
-//         can_go_left = false;
-//       }
-
-//       if(pre_calc_data[pos_to_right].position - std::min(mle_data.max_pos, mle_data.min_pos) > settings.windowsize){
-//         can_go_right = false;
-//       }
-
-//       if (!can_go_right && !can_go_left) {
-//         // break ;; cannot extend anymore
-//         break;
-
-//       } else if (can_go_right && !can_go_left) {
-//         // take the one to the right
-//         update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
-//         pos_to_right++;
-//       } else if (!can_go_right && can_go_left) {
-//         // take the one to the left
-//         update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
-//         pos_to_left--;
-//       } else if (can_go_right && can_go_left) {
-//         // take the closest
-//         if (pre_calc_data[pos_to_right].position - mle_data.curr_pos <=
-//             mle_data.curr_pos - pre_calc_data[pos_to_left].position) {
-//           // take the one to the right
-//           update_mle_data(mle_data, pre_calc_data[pos_to_right], pos_to_right);
-//           pos_to_right++;
-//         } else {
-//           // take the one to the left
-//           update_mle_data(mle_data, pre_calc_data[pos_to_left], pos_to_left);
-//           pos_to_left--;
-//         }
-//       } else {
-//         // we are screwed. should not be possible
-//       }
-
-//     } // end while loop
-
-//     // here we can check if the results are identical to last time, then we dont need to do anything besides printing.
-//     // see below for the old code where we re calculate every time
-//     bool same = false;
-//     if(!last_positions_set.empty() && mle_data.positions.size()==last_positions_set.size()){
-//       same=true;
-//       for(const size_t &  val: mle_data.positions){
-//         if(last_positions_set.count(val)!=1){
-//           same=false;
-//           break;
-//         }
-//       }
-//     }
-
-//     if(!same){
-//       last_positions_set.clear();
-//       last_positions_set.insert(mle_data.positions.begin(), mle_data.positions.end());
-//     }
-
-//     double minf;
-//     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-//     std::vector<double> param (1, SMALLTOLERANCE);
-//     nlopt::result result;
-//     double second_der, error;
-//     size_t iterations;
-
-//     if(! same){
-//       if(do_haploid_model){
-//         opt.set_max_objective(objective_func_F_haploid, &void_stuff);
-//         result = opt.optimize(param, minf);
-//         second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
-//       } else {
-//         opt.set_max_objective(objective_func_F, &void_stuff);
-//         result = opt.optimize(param, minf);
-//         second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-//       }
-//       error = 1.96/std::sqrt(-second_der);
-//       iterations=void_stuff.iteration;
-
-//       // assign params
-//       last_minf = minf;
-//       last_param = param;
-//       last_result = result;
-//       last_error = error;
-//       last_iterations = iterations;
-//     } else {
-//       minf = last_minf;
-//       param = last_param;
-//       result = last_result;
-//       error = last_error;
-//       iterations = last_iterations;
-//     }
-
-//     // // keep this
-//     // double minf;
-//     // F_void void_stuff(settings, &pre_calc_data, &mle_data);
-//     // std::vector<double> param (1, 0.5);
-//     // nlopt::result result;
-//     // double second_der, error;
-//     // size_t iterations;
-//     // opt.set_max_objective(objective_func_F, &void_stuff);
-//     // result = opt.optimize(param, minf);
-//     // second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-//     // error = 1.96/std::sqrt(-second_der);
-//     // iterations=void_stuff.iteration;
-//     // // to this
-
-
-//     // // temp
-//     // std::vector<double> dummy;
-//     // for (double i=0; i<=1; i+=0.01){
-//     //   std::vector<double> x(i);
-//     //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
-//     // }
-//     // // temp end
-
-//     // // probability of dinucleotide genotypes for the site in the center.
-//     // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &pre_calc_data[curr_idx]));
-//     // double sum_exp = first_dinucl_genotype;
-//     // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
-//     //   sum_exp += std::exp(val);
-//     // }
-//     // end
-
-//     f << "contig: " << settings.chrom
-//       << " Center_pos: " << mle_data.curr_pos
-//       << " N_CpGs: " << mle_data.n_cpgs
-//       << " Depth: " << mle_data.total_depth
-//       << " Distance: " << mle_data.max_pos - mle_data.min_pos
-//       << " ll: " << minf
-//       << " f: " << param[0]
-//       << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
-//       << " iterations: " << iterations
-//       << " optim_return_code: " << result
-//       << " Incl_pos: " << mle_data.positions[0];
-//       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
-//         f << ","<< *i;
-//       }
-
-//       // // printing probability of dinucleotide genotypes for the site in the center.
-//       // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ;
-//       // for (auto & val : pre_calc_data[curr_idx].remaining_dinucl_genotypes){
-//       //        f << ","<< std::exp(val)/sum_exp ;
-//       // }
-//       // end
-
-//       f << '\n';
-
-//     // // // checking that the derivative is correct
-//     // double tmp_ll;
-//     // for (double fval=0.0; fval<=1; fval+=0.01){
-//     //   std::vector<double> f_vec_temp(1,fval), grad_vec_temp(1,0);
-//     //   tmp_ll = objective_func_F(f_vec_temp, grad_vec_temp, &void_stuff);
-//     //   f << "f: " << fval << " like: " << tmp_ll  << " " << std::exp(tmp_ll) << " derivative: "  << grad_vec_temp[0] << '\n';
-//     // }
-//     // f << std::flush;
-//     // f.close();
-
-//     // std::cerr << "BREAKING";
-//     // std::cerr << std::flush;
-//     // exit(EXIT_SUCCESS);
-
-
-//   }
-//   f << std::flush;
-//   f.close();
-// }
-
-// void run_mle_bed(general_settings & settings,
-//                  std::vector<pre_calc_per_site> & pre_calc_data,
-//                  std::vector<std::pair<size_t, size_t>> & bed_coord) {
-//   std::string filename = settings.outbase + ".BED.F";
-//   std::ofstream f (filename.c_str());
-//   checkfilehandle<std::ofstream>(f, filename);
-//   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
-//   nlopt::opt opt(nlopt::LD_MMA, 1);
-//   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
-//   opt.set_maxeval(1000);
-//   opt.set_lower_bounds(lb);
-//   opt.set_upper_bounds(up);
-//   opt.set_xtol_abs(0);
-//   opt.set_ftol_abs(1e-15);
-//   opt.set_xtol_rel(0);
-//   opt.set_ftol_rel(0);
-//   for (const auto & bed : bed_coord){
-//     std::vector<size_t> sites_to_include;
-//     for (size_t curr_idx = 0; curr_idx < pre_calc_data.size(); curr_idx++) {
-
-//       if (pre_calc_data[curr_idx].position >= bed.first && pre_calc_data[curr_idx].position < bed.second){
-
-//         sites_to_include.push_back(curr_idx);
-//       }
-//       if(pre_calc_data[curr_idx].position >= bed.second){
-//         break;
-//       }
-
-//     }
-//     if( sites_to_include.size()==0){
-//       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
-//       continue;
-//     }
-
-//     // it is stupid to run over data again, but too tired to make new structs for the BED setup.
-//     // FIXME: make a struct that does not need to be initialized, cause then it can be used in the for loop above.
-//     per_mle_run mle_data(pre_calc_data[sites_to_include[0]], sites_to_include[0]);
-//     for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
-//       update_mle_data(mle_data, pre_calc_data[*it], *it);
-//     }
-
-//     if(mle_data.total_depth == 0){
-//       f << settings.chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
-//       continue;
-//     }
-
-//     double minf;
-//     F_void void_stuff(&settings, &pre_calc_data, &mle_data);
-//     // std::vector<double> param (1, 0.5);
-//     std::vector<double> param (1, SMALLTOLERANCE);
-//     nlopt::result result;
-//     double second_der, error;
-//     size_t iterations;
-
-//     // // temp
-//     // std::vector<double> dummy;
-//     // for (double i=0; i<=1; i+=0.01){
-//     //   std::vector<double> x(i);
-//     //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
-//     // }
-//     // loglikelihood_after_mle(param[0],
-//     // // temp end
-
-//     if(do_haploid_model){
-//       opt.set_max_objective(objective_func_F_haploid, &void_stuff);
-//       result = opt.optimize(param, minf);
-//       second_der = objective_func_F_second_deriv_haploid(param[0], pre_calc_data, mle_data);
-//     } else {
-//       opt.set_max_objective(objective_func_F, &void_stuff);
-//       result = opt.optimize(param, minf);
-//       second_der = objective_func_F_second_deriv(param[0], pre_calc_data, mle_data);
-//     }
-//     error = 1.96/std::sqrt(-second_der);
-//     iterations=void_stuff.iteration;
-
-//     f << settings.chrom << ":" << bed.first<<"-"<<bed.second
-//       << " N_CpGs: " << mle_data.n_cpgs
-//       << " Depth: " << mle_data.total_depth
-//       << " Distance: " << mle_data.max_pos - mle_data.min_pos
-//       << " ll: " << minf
-//       << " f: " << param[0]
-//       << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
-//       << " iterations: " << iterations
-//       << " optim_return_code: " << result
-//       << " Incl_pos: " << mle_data.positions[0];
-//       for (auto i=mle_data.positions.begin()+1; i!=mle_data.positions.end(); i++){
-//         f << ","<< *i;
-//       }
-//       f << std::endl;
-
-//   }
-//   f.close();
-// }
-
-double base_condition_one_genotype(const size_t &strand, const double &deam,
-                                   const double &seqerror, const size_t &base,
-                                   const size_t &geno) {
-  // - (strand==1 for reverse)
-  // + (strand==0 for forward)
-  // A->0; C->1; G->2; T->3
-  double res;
-  if ((strand==1 && geno == 2 && base == 2) ||
-      (strand==0 && geno == 1 && base == 1)) {
-    // - 2 2 or + 1 1
-    res = ((1 - deam) * (1 - seqerror)) + (deam * seqerror / 3) +
-          (seqerror * seqerror / 3);
-
-  } else if ((strand==1 && geno == 2 && base == 0) ||
-             (strand==0 && geno == 1 && base == 3)) {
-    // - 2 0 or + 1 3
-    res = (deam * (1 - seqerror)) + ((1 - deam) * seqerror / 3) +
-          (seqerror * seqerror / 3);
-    // std::cerr << strand << " " << geno << " " << base << " " << " " << deam << " " << res  << std::endl;
-  } else {
-    // the rest
-    if (geno == base) {
-      res = (1 - seqerror) + (seqerror * seqerror / 3);
+      // assign params
+      last_minf = minf;
+      last_param = param;
+      last_result = result;
+      last_error = error;
+      last_iterations = iterations;
     } else {
-      res = (seqerror / 3) + (seqerror * seqerror / 3);
+      minf = last_minf;
+      param = last_param;
+      result = last_result;
+      error = last_error;
+      iterations = last_iterations;
     }
-  }
-  return res;
-}
 
-double calc_prob_obs_base(const double & seqerror, const size_t & base_compos, const double & deamin_rate){
-  double res;
-  if(base_compos == 0){  // CC :   seqerror/3 comes from AGT -> C. seqerror -> C -> ACG
-    res = ((1-deamin_rate) * (1-seqerror)) + (deamin_rate * seqerror/3) + (seqerror * seqerror/3);
-  }else if(base_compos == 1){  // CT :   seqerror/3 comes from AGT -> C. seqerror -> C -> ACG
-    res = (deamin_rate * (1-seqerror)) + ((1-deamin_rate) * seqerror/3) + (seqerror * seqerror/3);
-  } else { // mutation
-    res = ((1-deamin_rate) * seqerror/3) + (deamin_rate * seqerror/3) + (seqerror * seqerror/3);
+    // // keep this
+    // double minf;
+    // F_void void_stuff(settings, &cpg_data, &mle_run);
+    // std::vector<double> param (1, 0.5);
+    // nlopt::result result;
+    // double second_der, error;
+    // size_t iterations;
+    // opt.set_max_objective(objective_func_F, &void_stuff);
+    // result = opt.optimize(param, minf);
+    // second_der = objective_func_F_second_deriv(param[0], cpg_data, mle_run);
+    // error = 1.96/std::sqrt(-second_der);
+    // iterations=void_stuff.iteration;
+    // // to this
+
+
+    // // temp
+    // std::vector<double> dummy;
+    // for (double i=0; i<=1; i+=0.01){
+    //   std::vector<double> x(i);
+    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
+    // }
+    // // temp end
+
+    // // probability of dinucleotide genotypes for the site in the center.
+    // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &cpg_data[curr_idx]));
+    // double sum_exp = first_dinucl_genotype;
+    // for (auto & val : cpg_data[curr_idx].remaining_dinucl_genotypes){
+    //   sum_exp += std::exp(val);
+    // }
+    // end
+#if 0
+    std::cerr << "done " << result << std::endl;
+#endif
+
+    f << "contig: " << chrom
+      << " Center_pos: " << mle_run.curr_pos
+      << " N_CpGs: " << mle_run.n_cpgs
+      << " Depth: " << mle_run.total_depth
+      << " Distance: " << mle_run.max_pos - mle_run.min_pos
+      << " ll: " << minf
+      << " f: " << param[0]
+      << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
+      << " iterations: " << iterations
+      << " optim_return_code: " << result
+      << " Incl_pos: " << mle_run.curr_pos;
+    for (auto & val: mle_run.positions){
+        f << ","<< val;
+      }
+
+      // // printing probability of dinucleotide genotypes for the site in the center.
+      // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ;
+      // for (auto & val : cpg_data[curr_idx].remaining_dinucl_genotypes){
+      //        f << ","<< std::exp(val)/sum_exp ;
+      // }
+      // end
+
+      f << '\n';
+
+    // // // checking that the derivative is correct
+    // double tmp_ll;
+    // for (double fval=0.0; fval<=1; fval+=0.01){
+    //   std::vector<double> f_vec_temp(1,fval), grad_vec_temp(1,0);
+    //   tmp_ll = objective_func_F(f_vec_temp, grad_vec_temp, &void_stuff);
+    //   f << "f: " << fval << " like: " << tmp_ll  << " " << std::exp(tmp_ll) << " derivative: "  << grad_vec_temp[0] << '\n';
+    // }
+    // f << std::flush;
+    // f.close();
+
+    // std::cerr << "BREAKING";
+    // std::cerr << std::flush;
+    // exit(EXIT_SUCCESS);
+
+
   }
-  return res;
+  f << std::flush;
+  f.close();
 }
 
 void update_dinucl_priors(general_settings & settings){
@@ -1746,12 +1668,14 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
 
 
 void parse_reads_per_chrom_estF(general_settings & settings,
-                                     std::string & chrom,
-                                     rgs_info &rgs){
+                                std::string & chrom,
+                                std::vector<std::vector<double>> &param_deam_rgs,
+                                rgs_info &rgs){
 
   std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
   std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
   mask_sites(settings, chrom, ref_s);
+
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref_s->ref, ref_s->seq_len);
   int ncpgs=0;
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
@@ -1761,11 +1685,15 @@ void parse_reads_per_chrom_estF(general_settings & settings,
 
   read_stats rs;
   read_group_info read_rg;
-  alignment_data d;
-  std::vector<Site> cpg_data;
-  cpg_data.resize(ncpgs);
+  std::vector<my_cov_rg> cov_rg;
+  cov_rg.resize(rgs.n);
 
-  // think a bit. need to compute noM and M and remaining dinucl for each read. this should be done in calc_M_noM
+  alignment_data d;
+  std::vector<Site_s> cpg_data;
+  cpg_data.resize(ncpgs);
+  for (auto &m: cpg_map){
+    cpg_data[m.second].pos = m.first;
+  }
 
   bam1_t *rd = bam_init1();
 
@@ -1778,17 +1706,51 @@ void parse_reads_per_chrom_estF(general_settings & settings,
       continue;
 
     // do the work here
-    calc_M_noM(settings, d, cpg_data);
+    calc_M_noM(settings,
+               d,
+               cpg_map,
+               rgs.cycles[read_rg.rgname_idx],
+               cov_rg[read_rg.rgname_idx],
+               param_deam_rgs[read_rg.rgname_idx],
+               cpg_data);
 
   }
   time(&end_time_load_data);
 
-  settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
-    std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
-    ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
-    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
+  for (size_t i=0; i<rgs.n; i++){
+     settings.buffer = "\t-> Total_Observations RG: " + rgs.rgs[i] + " CpG obs: " +
+       std::to_string(cov_rg[i].cpg) + " CpGCoverage: " +
+       std::to_string((double)cov_rg[i].cpg/(double)ncpgs) + '\n';
+     print_log(settings);
+  }
 
-  print_log(settings);
+  // adding priors to all alt genotypes.
+  for(auto & s: cpg_data){
+    for (size_t dinucl_idx=1; dinucl_idx<SEVEN_DINUCL_GENOTYPES.size(); dinucl_idx++){
+      s.remaining_dinucl_genotypes[dinucl_idx-1] += s.remaining_dinucl_genotypes[dinucl_idx-1] + LOG_PRIORS[dinucl_idx];
+    }
+  }
+
+#if 0
+  std::vector<Site_s> cpg_data2;
+  for (auto &val: cpg_data){
+    if(val.depth)
+      cpg_data2.push_back(val);
+  }
+  std::cerr << cpg_data.size() << " " << cpg_data2.size() << '\n';
+  cpg_data = cpg_data2;
+#endif
+
+
+  if(settings.bed_f.empty()){
+    run_mle(settings, chrom, cpg_data);
+  } else {
+    settings.buffer += "\t-> Dumping MLE of F to " + settings.outbase + ".BED.F" + '\n';
+    print_log(settings);
+    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
+    // run_mle_bed(settings, mle_run, bed_coord);
+  }
+
 
   // calc F for this chrom. use the code from get_F.cpp in trash
 
@@ -1894,8 +1856,8 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
     tmf[i] = read_count_file(settings, rgs.rgs[i]);
   }
 
-  std::vector<std::vector<double>> param_deam;
-  param_deam.resize(rgs.n);
+  std::vector<std::vector<double>> param_deam_rgs;
+  param_deam_rgs.resize(rgs.n);
 
   settings.args_stream << std::flush;
   for (size_t i=0; i<rgs.n; i++){
@@ -1903,11 +1865,11 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
     //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
     //   print_log(settings);
     //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-    //   param_deam[i] = load_deamrates_f(settings);
+    //   param_deam_rgs[i] = load_deamrates_f(settings);
     // } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
     //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
     //   print_log(settings);
-    //   param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
+    //   param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
     // }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
       print_log(settings);
@@ -1917,7 +1879,7 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
       run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs.rgs[i]);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
       print_log(settings);
-      param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
+      param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
       // }
   }
   settings.args_stream << std::flush;
@@ -1928,18 +1890,18 @@ void estF(general_settings & settings, rgs_info &rgs){
   std::vector<std::pair<size_t, size_t>> bed_coord;
 
   // load deamination rates from deamrates
-  std::vector<std::vector<double>> param_deam;
-  param_deam.resize(rgs.n);
+  std::vector<std::vector<double>> param_deam_rgs;
+  param_deam_rgs.resize(rgs.n);
   for (size_t i=0; i<rgs.n; i++){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
       settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
       print_log(settings);
       std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-      param_deam[i] = load_deamrates_f(settings);
+      param_deam_rgs[i] = load_deamrates_f(settings);
     } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
       settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
       print_log(settings);
-      param_deam[i] = load_deamrates(settings, rgs.rgs[i]);
+      param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
     } else{
       std::cerr << "\nCannot find deamination rates. EXITING" << std::endl;
       exit(EXIT_FAILURE);
@@ -1949,7 +1911,7 @@ void estF(general_settings & settings, rgs_info &rgs){
   print_log(settings);
 
   for(auto & c : settings.chrom){
-    parse_reads_per_chrom_estF(settings, c, rgs);
+    parse_reads_per_chrom_estF(settings, c, param_deam_rgs, rgs);
   }
 
 
@@ -1973,7 +1935,7 @@ int main(int argc, char *argv[]) {
     settings.args_stream.open(stream_filename.c_str());
     checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
   } else {
-    std::string stream_filename (settings.outbase+".estdeam.args");
+    std::string stream_filename (settings.outbase+".estDEAM.args");
     settings.args_stream.open(stream_filename.c_str());
     checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
   }
@@ -2008,7 +1970,7 @@ int main(int argc, char *argv[]) {
   if(settings.analysis=="estF"){
     settings.buffer += "\t-> Estimating methylation levels (f)\n";
     print_log(settings);
-    // estF(settings, rgs);
+    estF(settings, rgs);
   } else {
     settings.buffer += "\t-> Estimating Deamination rates (D)\n";
     print_log(settings);
