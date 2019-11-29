@@ -29,6 +29,7 @@ void print_help(){
   std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
   std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
+  std::cerr << "\t-> Skip CpG without data (-skip): " << std::endl;  
 }
 
 bool check_estF_args(general_settings & settings){
@@ -250,6 +251,10 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
         std::cerr << "readgroups_f FILE DOES NOT EXISTS" << std::endl;
         exit(EXIT_FAILURE);        
       }
+    }
+
+    if((*i) == "-skip"){
+      settings.skip_empty_cpg=true;
     }
     
   }

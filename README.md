@@ -12,7 +12,7 @@ The model is implemented as a two step procedure. The first step recovers a maxi
 DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet.
 
 ``` bash
-  git clone https://gitlab.com/KHanghoj/DamMet.git
+  git clone https://github.com/KHanghoj/DamMet.git
   cd DamMet && make && cd ..
 ```
 [zlib](https://zlib.net/) and [cmake](https://cmake.org/download) should be globally installed.
@@ -24,9 +24,9 @@ DamMet takes three required arguments, a bam file (-b), a reference genome (-r),
 ### Running example ###
 
 ``` bash
-  git clone https://gitlab.com/KHanghoj/DamMet-tutorial.git
+  git clone https://github.com/KHanghoj/DamMet-tutorial.git
   cd DamMet-tutorial
-  git clone https://gitlab.com/KHanghoj/DamMet.git
+  git clone https://github.com/KHanghoj/DamMet.git
   cd DamMet && make && cd ..
   bash run.sh
 ```
@@ -54,7 +54,7 @@ This file contains the MLE of the deamination rates.
 3. Prime (5-prime == 0; 3-prime == 1)
 4. Deamination rate
 
-##### *CHR.READGROUP.BED.F* or *CHR.READGROUP.F* #####
+##### *CHR.READGROUP.CHROM.BED.F* or *CHR.READGROUP.CHROM.F* #####
 Every row is a BED region or a genomic CpG. Every column output comes with a description.
 
 

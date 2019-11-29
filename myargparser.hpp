@@ -23,6 +23,7 @@ struct general_settings{
   std::string exclude_sites_fn, exclude_bed_fn, outbase, deamrates_filename;
   std::string readgroups_f, bed_f, priors_str;
   std::vector<std::string> chrom;
+  bool skip_empty_cpg=false;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;

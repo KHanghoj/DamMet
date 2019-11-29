@@ -1176,7 +1176,6 @@ void run_mle(general_settings & settings,
       } else if (!can_go_right && can_go_left) {
         // take the one to the left
         mle_run.update_left(cpg_data[pos_to_left]);
-        // update_mle_run(mle_run, cpg_data[pos_to_left], pos_to_left);
         pos_to_left--;
       } else if (can_go_right && can_go_left) {
         // take the closest
@@ -1185,14 +1184,10 @@ void run_mle(general_settings & settings,
           // take the one to the right
           mle_run.update_right(cpg_data[pos_to_right]);
           pos_to_right++;
-          // update_mle_run(mle_run, cpg_data[pos_to_right], pos_to_right);
-          // pos_to_right++;
         } else {
           // take the one to the left
           mle_run.update_left(cpg_data[pos_to_left]);
           pos_to_left--;
-          // update_mle_run(mle_run, cpg_data[pos_to_left], pos_to_left);
-          // pos_to_left--;
         }
       } else {
         // we are screwed. should not be possible
@@ -1727,17 +1722,19 @@ void parse_reads_per_chrom_estF(general_settings & settings,
     }
   }
 
-#if 0
-  // removing sites without data
+  // bad stuff
   std::vector<Site_s> cpg_data2;
-  for (auto &val: cpg_data){
-    if(val.depth)
-      cpg_data2.push_back(val);
+  if(settings.skip_empty_cpg){
+    settings.buffer = "\t-> Skip CpGs without data\n";
+    print_log(settings);
+    for (auto &val: cpg_data){
+      if(val.depth)
+        cpg_data2.push_back(val);
+    }
+    std::cerr << cpg_data.size() << " " << cpg_data2.size() << '\n';
+    cpg_data = cpg_data2;
   }
-  std::cerr << cpg_data.size() << " " << cpg_data2.size() << '\n';
-  cpg_data = cpg_data2;
-#endif
-
+  cpg_data2.clear();
 
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
@@ -1852,16 +1849,16 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
 
   settings.args_stream << std::flush;
   for (size_t i=0; i<rgs.n; i++){
-    // if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-    //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
-    //   print_log(settings);
-    //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
-    //   param_deam_rgs[i] = load_deamrates_f(settings);
-    // } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
-    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
-    //   print_log(settings);
-    //   param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
-    // }else {
+    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+      settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
+      print_log(settings);
+      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+      param_deam_rgs[i] = load_deamrates_f(settings);
+    } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
+      settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
+      print_log(settings);
+      param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
+    }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
       print_log(settings);
 #if 0
@@ -1871,7 +1868,7 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
-      // }
+  }
   }
   settings.args_stream << std::flush;
 }
