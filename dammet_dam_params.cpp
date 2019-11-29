@@ -1203,7 +1203,7 @@ void run_mle(general_settings & settings,
     // here we can check if the results are identical to last time, then we dont need to do anything besides printing.
     // see below for the old code where we re calculate every time
     bool same = false;
-    if(!last_positions_set.empty() && mle_run.n_cpgs==last_positions_set.size()){
+    if(!last_positions_set.empty() && mle_run.positions.size()==last_positions_set.size()){
       same=true;
       for(auto &val: mle_run.positions){
         if(last_positions_set.count(val)!=1){
@@ -1219,13 +1219,13 @@ void run_mle(general_settings & settings,
     }
 
     double minf;
-    F_void void_stuff(&settings, mle_run.to_include);
     std::vector<double> param (1, SMALLTOLERANCE);
     nlopt::result result;
     double second_der, error;
     size_t iterations;
 
     if(! same){
+      F_void void_stuff(&settings, mle_run.to_include);
       opt.set_max_objective(objective_func_F, &void_stuff);
       result = opt.optimize(param, minf);
 #if 0
@@ -1295,9 +1295,9 @@ void run_mle(general_settings & settings,
       << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
       << " iterations: " << iterations
       << " optim_return_code: " << result
-      << " Incl_pos: " << mle_run.curr_pos;
-    for (auto & val: mle_run.positions){
-        f << ","<< val;
+      << " Incl_pos: " << mle_run.positions[0];
+    for (auto it=mle_run.positions.begin()+1; it!=mle_run.positions.end(); it++){
+        f << ","<< *it;
       }
 
       // // printing probability of dinucleotide genotypes for the site in the center.
@@ -1667,19 +1667,6 @@ void parse_reads_per_chrom_estF(general_settings & settings,
                                 std::vector<std::vector<double>> &param_deam_rgs,
                                 rgs_info &rgs){
 
-  // update priors if provided
-  if(!settings.priors_str.empty()){
-    update_dinucl_priors(settings);
-  }
-
-  settings.buffer = "\t-> Dinucl genotype priors (-h): ";
-
-  for (const auto & val : LOG_PRIORS){
-    settings.buffer += std::to_string(val)+',';
-  }
-  settings.buffer += '\n';
-  print_log(settings);
-
 
   std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
   std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
@@ -1913,6 +1900,21 @@ void estF(general_settings & settings, rgs_info &rgs){
   }
 
   print_log(settings);
+
+  // update priors if provided
+  if(!settings.priors_str.empty()){
+    update_dinucl_priors(settings);
+  }
+
+  settings.buffer = "\t-> Dinucl genotype priors (-h): ";
+
+  for (const auto & val : LOG_PRIORS){
+    settings.buffer += std::to_string(val)+',';
+  }
+  settings.buffer += '\n';
+  print_log(settings);
+
+
 
   for(auto & c : settings.chrom){
     parse_reads_per_chrom_estF(settings, c, param_deam_rgs, rgs);

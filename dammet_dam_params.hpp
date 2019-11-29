@@ -175,7 +175,7 @@ struct per_mle_run {
     n_cpgs = 1;
     to_include.emplace_back(std::make_unique<Site_s>(_d));
     center_site = _d;
-
+    positions.push_back(_d.pos);
     total_depth = _d.depth;
     min_pos = _d.pos;
     max_pos = _d.pos;
