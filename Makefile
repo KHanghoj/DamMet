@@ -5,6 +5,7 @@ CXX ?= g++
 LIBS = -lz -lm -lbz2 -llzma -lpthread -lcurl
 
 # htslib/libhts.a nlopt-2.5.0/install/lib/libnlopt.a
+# -pg
 FLAGS = -Ihtslib -Inlopt-2.5.0/install/include -O3 $(LDFLAGS) 
 
 CXXFLAGS := $(FLAGS) $(CXXFLAGS) -std=c++14 

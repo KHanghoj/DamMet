@@ -1341,7 +1341,7 @@ void update_dinucl_priors(general_settings & settings){
     res.push_back( val );
   }
   if (res.size() != LOG_PRIORS.size()){
-    std::cerr << "\t -> ERROR: provide a string of seven prior e.g. -h 1,0,0,0,0,0,0" << '\n';
+    std::cerr << "\t -> ERROR: provide a string of seven priors e.g. -h 1,0,0,0,0,0,0" << '\n';
     exit(EXIT_FAILURE);
   }
 
@@ -1352,11 +1352,6 @@ void update_dinucl_priors(general_settings & settings){
   for (size_t i=0; i<res.size(); i++){
     LOG_PRIORS[i] = std::log(res[i]/sum);
   }
-
-  // for (const auto & val : LOG_PRIORS){
-  //   std::cerr << val << '\n';
-  // }
-
 }
 
 void load_rg_from_file(general_settings & settings, rgs_info &rgs){
@@ -1672,6 +1667,20 @@ void parse_reads_per_chrom_estF(general_settings & settings,
                                 std::vector<std::vector<double>> &param_deam_rgs,
                                 rgs_info &rgs){
 
+  // update priors if provided
+  if(!settings.priors_str.empty()){
+    update_dinucl_priors(settings);
+  }
+
+  settings.buffer = "\t-> Dinucl genotype priors (-h): ";
+
+  for (const auto & val : LOG_PRIORS){
+    settings.buffer += std::to_string(val)+',';
+  }
+  settings.buffer += '\n';
+  print_log(settings);
+
+
   std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
   std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
   mask_sites(settings, chrom, ref_s);
@@ -1732,6 +1741,7 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   }
 
 #if 0
+  // removing sites without data
   std::vector<Site_s> cpg_data2;
   for (auto &val: cpg_data){
     if(val.depth)
@@ -1745,14 +1755,8 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
   } else {
-    settings.buffer += "\t-> Dumping MLE of F to " + settings.outbase + ".BED.F" + '\n';
-    print_log(settings);
-    settings.args_stream << "\t-> Dumping MLE of F to " << settings.outbase << ".BED.F" << '\n';
     // run_mle_bed(settings, mle_run, bed_coord);
   }
-
-
-  // calc F for this chrom. use the code from get_F.cpp in trash
 
 
   bam_destroy1(rd);
