@@ -33,6 +33,7 @@ DamMet takes three required arguments, a bam file (-b), a reference genome (-r),
 
 The output plot (*result.pdf*) of this running example should be identical to *result.expected.pdf*. The main script in this example ('run.sh') can easily be used as a template to suit any analyses of interest.
 
+
 ### Options, Input and Output formats ###
 
 All available options followed by a description can displayed by running DamMet without any arguments (`./DamMet/DamMet`). 
