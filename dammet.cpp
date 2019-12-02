@@ -1657,6 +1657,15 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
 }
 
 
+std::vector<Site_s> remove_cpg_wo_data(std::vector<Site_s> &data){
+  std::vector<Site_s> res;
+  for (auto &val: data){
+    if(val.depth)
+      res.push_back(val);
+  }
+  return(res);
+}
+
 void parse_reads_per_chrom_estF(general_settings & settings,
                                 std::string & chrom,
                                 std::vector<std::vector<double>> &param_deam_rgs,
@@ -1722,19 +1731,11 @@ void parse_reads_per_chrom_estF(general_settings & settings,
     }
   }
 
-  // bad stuff
-  std::vector<Site_s> cpg_data2;
   if(settings.skip_empty_cpg){
-    settings.buffer = "\t-> Skip CpGs without data\n";
+    cpg_data = remove_cpg_wo_data(cpg_data);
+    settings.buffer = "\t-> Skip CpGs without data CpGs remaining: " + std::to_string(cpg_data.size()) + '\n';
     print_log(settings);
-    for (auto &val: cpg_data){
-      if(val.depth)
-        cpg_data2.push_back(val);
-    }
-    std::cerr << cpg_data.size() << " " << cpg_data2.size() << '\n';
-    cpg_data = cpg_data2;
   }
-  cpg_data2.clear();
 
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
