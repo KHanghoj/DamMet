@@ -35,3 +35,47 @@ size_t do_haploid_model = 0;
 
 
 using unint = unsigned int;
+
+// header management:
+// https://stackoverflow.com/a/2596554/2788987
+using dinucl_pair_of_pair = std::pair<
+  std::pair<int, int>, // first genotype
+  std::pair<int, int> // second genotype
+  >;
+using dinucl_pair_of_pairs = std::vector<dinucl_pair_of_pair>;
+
+const dinucl_pair_of_pairs GENERATE_SEVEN_DINUCL_GENOTYPES(){
+  dinucl_pair_of_pairs res;
+
+  for (int i=0; i<7; i++){
+    dinucl_pair_of_pair di;
+    di.first.first=1;
+    di.first.second=1;
+    di.second.first=2;
+    di.second.second=2;
+    res.push_back(di);
+  }
+  // see latex for explanation
+  // related to methylation
+  res[1].first.second=3;
+  res[2].second.second=0;
+  // unrelated to methylation:
+  res[3].first.second=0;
+  res[4].second.second=1;
+  res[5].first.second=2;
+  res[6].second.second=3;
+  return res;
+}
+
+
+std::vector<double> GET_LOG_PRIOR(){
+  std::vector<double> res(7, std::log(0));
+  res[0] = std::log(1);
+  return res;
+}
+
+std::vector<double> GET_LOG_PRIOR_FLAT(){
+  std::vector<double> res(7, std::log(0.001/6.0));
+  res[0] = std::log(1-0.001);
+  return res;
+}

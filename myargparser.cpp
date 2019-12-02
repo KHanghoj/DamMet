@@ -256,6 +256,10 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     if((*i) == "-skip"){
       settings.skip_empty_cpg=true;
     }
+
+    if((*i) == "-verbose"){
+      settings.verbose=true;
+    }
     
   }
 

@@ -26,11 +26,11 @@ DamMet takes three required arguments, a bam file (-b), a reference genome (-r),
 ### Running example ###
 
 ``` bash
-  git clone https://github.com/KHanghoj/DamMet-tutorial.git
-  cd DamMet-tutorial
-  git clone https://github.com/KHanghoj/DamMet.git
-  cd DamMet && make && cd ..
-  bash run.sh
+git clone https://github.com/KHanghoj/DamMet.git
+make -C DamMet 
+git clone https://github.com/KHanghoj/DamMet-tutorial.git
+cd DamMet-tutorial
+bash run.sh
 ```
 
 The output plot (*result.pdf*) of this running example should be identical to *result.expected.pdf*. The main script in this example ('run.sh') can easily be used as a template to suit any analyses of interest.

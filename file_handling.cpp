@@ -3,6 +3,7 @@
 #include <vector>
 #include <sstream> //stringstream
 #include <fstream>  // open file
+#include <utility> // pair
 
 
 #include "file_handling.hpp"
@@ -93,4 +94,34 @@ std::vector<std::string> parse_chrom_file(std::string & filename){
     }
   }
   return res;
+}
+
+
+std::vector<std::pair<size_t, size_t>> parse_bed_file(std::string filename,  std::string &curr_chrom){
+  std::vector<std::pair<size_t, size_t>> res;
+  std::ifstream f (filename.c_str());
+  checkfilehandle<std::ifstream>(f, filename);
+  if(f.is_open()){
+    std::string row;
+    std::string chrom;
+    size_t start,end ;
+    while(getline(f, row)){
+      if(row.empty()){
+        std::cerr << "BED: "<< filename << " contains empty rows. EXITING" << '\n';
+        exit(EXIT_FAILURE);
+      }
+      std::stringstream ss(row);
+
+      ss >> chrom >> start >> end;
+      if(start>=end){
+        std::cerr << "BED: "<< filename << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
+        exit(EXIT_FAILURE);
+      }
+      if(chrom==curr_chrom){
+        res.push_back(std::make_pair (start,end));
+      }
+    }
+  }
+  f.close();
+  return(res);
 }

@@ -24,6 +24,7 @@ struct general_settings{
   std::string readgroups_f, bed_f, priors_str;
   std::vector<std::string> chrom;
   bool skip_empty_cpg=false;
+  bool verbose=false;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;

@@ -18,8 +18,16 @@
 #include "nlopt.hpp"
 // #include "/home/krishang/Desktop/test2/DamMet/nlopt-2.5.0/install/include/nlopt.h"
 
-int VERBOSE=1;
+bool VERBOSE=false;
 int READS = 1e6;
+std::vector<double> LOG_PRIORS=GET_LOG_PRIOR_FLAT();
+// const std::vector<double> LOG_PRIORS=get_log_prior_flat();
+// const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
+// const std::vector<double> PRIORS=get_prior();
+const dinucl_pair_of_pairs SEVEN_DINUCL_GENOTYPES = GENERATE_SEVEN_DINUCL_GENOTYPES();
+
+
+
 
 template <typename T>
 void checkfilehandle(T &fh, std::string filename){
@@ -1046,36 +1054,26 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
   double log_like_cgcg_geno, read_der;
   double reads_grad, geno_grad;
   double read_like, log_like_genos ;
-  double noM, M, mape ;
   double log_like_window=0;
-
-
 
   if(!grad.empty()){
     grad[0] = 0;
   }
   for (auto & site : d->to_include){
-
-  // pre_calc_per_site * site;
-  // for (const auto & idx : d->mle_data->idx_to_include){
-    // site = &d->data->at(idx);
     log_like_cgcg_geno = 0;
     reads_grad = 0;
     geno_grad = 0;
     log_like_genos = 0;
     for (auto &obs : site->data){
-      noM =  obs.noM;
-      M = obs.M;
-      mape = obs.me;
-      read_der = (1-mape) * (M - noM);
-      read_like = (1-mape) * ((1-x[0]) * noM + x[0] * M) + mape*DINUCL_FLAT_PRIOR;
+      read_der = (1-obs.me) * (obs.M - obs.noM);
+      read_like = (1-obs.me) * ((1-x[0]) * obs.noM + x[0] * obs.M) + obs.me*DINUCL_FLAT_PRIOR;
       log_like_cgcg_geno += std::log(read_like);
       if(!grad.empty()){
         // d/df per read
         reads_grad += read_der/read_like;
       }
     // wolfram: derivative  ln((1-w)*((1-x) * k + (x * h)) + w*p)
-    // beloved wolfram got it right, just modified a few things for readability
+    // wolfram got it right, just modified a few things for readability
     // if(!grad.empty()){
     //   grad[0] += ((1-mape) * (M - noM)) / res;
     // }
@@ -1101,6 +1099,61 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
   return log_like_window;
 }
 
+double objective_func_F_second_deriv(const double & f,  void *my_func_data){
+  F_void *d = static_cast<F_void*>(my_func_data);
+  double total_d2=0;
+  // double nominator, denominator;
+  double noM, M, mape ;
+  double log_like_cgcg_geno;
+  double reads_grad, geno_grad;
+  double read_der, read_like, log_like_genos ;
+  double numerator_read_der2, denominator_read_der2, reads_der2;
+  double geno_grad_der2, like_genos, like_genos_der2;
+  for (auto & site : d->to_include){
+    log_like_cgcg_geno = 0;
+    reads_grad=0;
+    reads_der2=0;
+    for (auto &obs : site->data){
+      read_der = (1-obs.me) * (obs.M - obs.noM);
+      read_like = (1-obs.me) * ((1-f) * obs.noM + f * obs.M) + obs.me*DINUCL_FLAT_PRIOR;
+      reads_grad += read_der/read_like;
+
+      numerator_read_der2 = std::pow((1-obs.me),2) * std::pow((obs.M - obs.noM),2);
+      denominator_read_der2 = std::pow((1-obs.me) * (obs.noM * (1-f) + f * obs.M) + obs.me*DINUCL_FLAT_PRIOR, 2);
+      reads_der2 += - (numerator_read_der2 / denominator_read_der2);
+      // \frac{\partial }{\partial \:x^2}\left(ln\left(\left(1-w\right)\cdot \left(\left(1-x\right)\:\cdot \:n\:+\:\left(x\:\cdot \:M\right)\right)\:+\:w\cdot \:p\right)\:\:\right)
+
+      log_like_cgcg_geno += std::log(read_like);
+      // https://www.symbolab.com/
+      // wolfram: second derivative ln((1-w)*((1-x) * k + (x * h)) + w*p)
+      // second derivative:
+      // second_der += (std::pow((1-obs.me),2) * std::pow((obs.M - obs.noM),2)) / std::pow((-obs.M * (obs.me-1) * f + obs.noM * (obs.me-1) * (1-f) + obs.me*DINUCL_FLAT_PRIOR), 2);
+    }
+    // exp(log_like_cgcg_geno + LOG_PRIORS) * d/df all_reads. this is only including cgcg as the derivatives of the remaining are 0 as they are unrelated to F.
+
+    //g(x) first derivative     z(x)                              y(x)
+    geno_grad = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_grad;
+
+    // g'(x) (of the first derivative) -> z(x)*y'(x) + z'(x) * y(x)
+    geno_grad_der2 = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_der2 + (geno_grad * reads_grad);
+    log_like_genos = log_like_cgcg_geno + LOG_PRIORS[0];
+    // summation of the likelihood of the remaining genotypes
+    for (auto it=site->remaining_dinucl_genotypes.begin(); it!=site->remaining_dinucl_genotypes.end(); it++){
+       log_like_genos = oplusnatl(log_like_genos, *it);
+    }
+
+    // f(x) first derivative is 1/below
+    like_genos = std::exp(log_like_genos);
+    // f'(x) of the first derivative
+    like_genos_der2 = (- 1.0/(std::pow(like_genos,2))) * geno_grad;
+
+    //             f'(x)           g(x)           f(x)              g'(x)
+    total_d2 += like_genos_der2 * geno_grad + (1.0/like_genos) * geno_grad_der2;
+  }
+  return total_d2;
+}
+
+
 void setup_mma(nlopt::opt &opt){
   std::vector<double> lb(1, SMALLTOLERANCE), up(1, 1-SMALLTOLERANCE);
 
@@ -1114,6 +1167,10 @@ void setup_mma(nlopt::opt &opt){
 
 }
 
+void print_header(std::ofstream &f, const std::string & l){
+  f<<l;
+}
+
 void run_mle(general_settings & settings,
              std::string & chrom,
              std::vector<Site_s> & cpg_data) {
@@ -1123,6 +1180,12 @@ void run_mle(general_settings & settings,
   print_log(settings);
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
+  print_header(f, "center n_cpgs n_obs distance ll f f_95_conf iter opt_return_code");
+  if(VERBOSE)
+    print_header(f, " incl_pos\n");
+  else
+    print_header(f, "\n");
+
 
   std::set<size_t> last_positions_set;
 
@@ -1223,9 +1286,13 @@ void run_mle(general_settings & settings,
       F_void void_stuff(&settings, mle_run.to_include);
       opt.set_max_objective(objective_func_F, &void_stuff);
       result = opt.optimize(param, minf);
-#if 0
-      second_der = objective_func_F_second_deriv(param[0], cpg_data, mle_run);
+#if 1
+      second_der = objective_func_F_second_deriv(param[0], &void_stuff);
       error = 1.96/std::sqrt(-second_der);
+#elif 0
+      // bootstrapping
+      // reset param
+      // sample indices and optimize
 #else
       second_der =0;
       error =0;
@@ -1276,25 +1343,27 @@ void run_mle(general_settings & settings,
     //   sum_exp += std::exp(val);
     // }
     // end
+
 #if 0
     std::cerr << "done " << result << std::endl;
 #endif
 
-    f << "contig: " << chrom
-      << " Center_pos: " << mle_run.curr_pos
-      << " N_CpGs: " << mle_run.n_cpgs
-      << " Depth: " << mle_run.total_depth
-      << " Distance: " << mle_run.max_pos - mle_run.min_pos
-      << " ll: " << minf
-      << " f: " << param[0]
-      << " f(95%conf): " << param[0]-error  << "," <<  param[0]+error
-      << " iterations: " << iterations
-      << " optim_return_code: " << result
-      << " Incl_pos: " << mle_run.positions[0];
-    for (auto it=mle_run.positions.begin()+1; it!=mle_run.positions.end(); it++){
+    f << chrom
+      << ":" << mle_run.curr_pos
+      << " " << mle_run.n_cpgs
+      << " " << mle_run.total_depth
+      << " " << mle_run.max_pos - mle_run.min_pos
+      << " " << minf
+      << " " << param[0]
+      << " " << param[0]-error  << "," <<  param[0]+error
+      << " " << iterations
+      << " " << result;
+    if(VERBOSE){
+      f << " " << mle_run.positions[0];
+      for (auto it=mle_run.positions.begin()+1; it!=mle_run.positions.end(); it++){
         f << ","<< *it;
       }
-
+    }
       // // printing probability of dinucleotide genotypes for the site in the center.
       // f << " dinucl_genos: " << first_dinucl_genotype/sum_exp ;
       // for (auto & val : cpg_data[curr_idx].remaining_dinucl_genotypes){
@@ -1319,6 +1388,93 @@ void run_mle(general_settings & settings,
     // exit(EXIT_SUCCESS);
 
 
+  }
+  f << std::flush;
+  f.close();
+}
+
+
+void run_mle_bed(general_settings & settings,
+                 std::string & chrom,
+                 std::vector<Site_s> & cpg_data) {
+  std::vector<std::pair<size_t, size_t>> bed_coord = parse_bed_file(settings.bed_f,  chrom);
+  std::string filename = settings.outbase + "." + chrom + ".BED.F";
+  settings.buffer += "\t-> Dumping MLE of F to " + filename + '\n';
+  print_log(settings);
+  std::ofstream f (filename.c_str());
+  checkfilehandle<std::ofstream>(f, filename);
+
+  // print header
+  print_header(f, "bed n_cpgs n_obs ll f f_95_conf iter opt_return_code");
+  if(VERBOSE)
+    print_header(f, " incl_pos\n");
+  else
+    print_header(f, "\n");
+
+
+  double last_minf;
+  std::vector<double>  last_param;
+  nlopt::result last_result;
+  double last_error;
+  size_t last_iterations;
+
+  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
+  nlopt::opt opt(nlopt::LD_MMA, 1);
+  setup_mma(opt);
+
+  for (const auto & bed : bed_coord){
+    std::vector<size_t> sites_to_include;
+    for (size_t curr_idx = 0; curr_idx < cpg_data.size(); curr_idx++) {
+
+      if (cpg_data[curr_idx].pos >= bed.first && cpg_data[curr_idx].pos < bed.second){
+
+        sites_to_include.push_back(curr_idx);
+      }
+      if(cpg_data[curr_idx].pos >= bed.second){
+        break;
+      }
+
+    }
+    if( sites_to_include.size()==0){
+      f << chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_SITES_IN_THE_REGION NOT_USED" << '\n';
+      continue;
+    }
+
+    // it is stupid to run over data again, but too tired to make new structs for the BED setup.
+    per_mle_run mle_run(cpg_data[sites_to_include[0]]);
+    for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
+      mle_run.stats_update(cpg_data[*it]);
+    }
+
+    if(mle_run.total_depth == 0){
+      f << chrom << ":" << bed.first<<"-"<<bed.second << " " << "NO_DATA_IN_THE_REGION NOT_USED"  << '\n';
+      continue;
+    }
+
+    double minf;
+    F_void void_stuff(&settings, mle_run.to_include);
+    std::vector<double> param (1, SMALLTOLERANCE);
+    opt.set_max_objective(objective_func_F, &void_stuff);
+    nlopt::result result = opt.optimize(param, minf);
+    double second_der = objective_func_F_second_deriv(param[0], &void_stuff);
+    double error = 1.96/std::sqrt(-second_der);
+
+
+    f << chrom << ":" << bed.first << "-" << bed.second
+      << " " << mle_run.n_cpgs
+      << " " << mle_run.total_depth
+      << " " << minf
+      << " " << param[0]
+      << " " << param[0]-error  << "," <<  param[0]+error
+      << " " << void_stuff.iteration
+      << " " << result;
+    if(VERBOSE){
+      f << " " << mle_run.positions[0];
+      for (auto it=mle_run.positions.begin()+1; it!=mle_run.positions.end(); it++){
+        f << ","<< *it;
+      }
+    }
+    f << '\n';
   }
   f << std::flush;
   f.close();
@@ -1376,45 +1532,7 @@ void load_rg_from_file(general_settings & settings, rgs_info &rgs){
     rgs.n = rgs.rgs.size();
 }
 
-// void parse_bed_file(std::string filename, std::vector<std::pair<size_t, size_t>> & res){
-//   std::ifstream f (filename.c_str());
-//   checkfilehandle<std::ifstream>(f, filename);
-//   if(f.is_open()){
-//     std::string row;
-//     std::string chrom;
-//     size_t start,end ;
-//     std::stringstream ss;
-//     while(getline(f, row)){
-//       if(row.empty()){
-//         std::cerr << "BED: "<< filename << " contains empty rows. EXITING" << '\n';
-//         exit(EXIT_FAILURE);
-//       }
-//       ss.str(row);
 
-//       ss >> chrom >> start >> end;
-//       if(start>=end){
-//         std::cerr << "BED: "<< settings.bed_f << " is not normal: chr: " << chrom << " Start: " << start << " END: " << end << ". EXITING" << '\n';
-//         exit(EXIT_FAILURE);
-//       }
-//       if(chrom==settings.chrom){
-//         res.push_back(std::make_pair (start,end));
-//       }
-//       ss.clear();
-//     }
-//   }
-//   f.close();
-// }
-
-void print_d(pre_calc_per_site & d){
-  std::cout << d.depth << " " << d.position <<  '\n';
-  for (const auto & val : d.remaining_dinucl_genotypes){
-    std::cout << val <<  '\n';
-  }
-  for (int i=0; i<d.depth;i++){
-    std::cout << i << " " << d.maperrors[i] << " " << d.pre_noM[i] << " " << d.pre_M[i] << '\n';
-  }
-  std::cout << std::flush;
-}
 
 struct read_group_info {
   std::string rgname;
@@ -1621,7 +1739,7 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
   mask_sites(settings, chrom, ref_s);
   const keeplist_map cpg_map = get_cpg_chrom_pos(ref_s->ref, ref_s->seq_len);
   int ncpgs=0;
-  // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+
   const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
   settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
 
@@ -1733,14 +1851,14 @@ void parse_reads_per_chrom_estF(general_settings & settings,
 
   if(settings.skip_empty_cpg){
     cpg_data = remove_cpg_wo_data(cpg_data);
-    settings.buffer = "\t-> Skip CpGs without data CpGs remaining: " + std::to_string(cpg_data.size()) + '\n';
+    settings.buffer = "\t-> Skip CpGs without data. CpGs remaining: " + std::to_string(cpg_data.size()) + '\n';
     print_log(settings);
   }
 
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
   } else {
-    // run_mle_bed(settings, mle_run, bed_coord);
+    run_mle_bed(settings, chrom, cpg_data);
   }
 
 
@@ -1804,8 +1922,6 @@ void chrom_in_bam(const general_settings &settings){
 }
 
 void estdeam(general_settings & settings, rgs_info &rgs) {
-  std::vector<std::pair<size_t, size_t>> bed_coord;
-
   print_log(settings);
 
   std::vector<std::vector<double>> tmf;
@@ -1847,8 +1963,8 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
 
   std::vector<std::vector<double>> param_deam_rgs;
   param_deam_rgs.resize(rgs.n);
-
   settings.args_stream << std::flush;
+
   for (size_t i=0; i<rgs.n; i++){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
       settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
@@ -1875,8 +1991,6 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
 }
 
 void estF(general_settings & settings, rgs_info &rgs){
-
-  std::vector<std::pair<size_t, size_t>> bed_coord;
 
   // load deamination rates from deamrates
   std::vector<std::vector<double>> param_deam_rgs;
@@ -1917,8 +2031,6 @@ void estF(general_settings & settings, rgs_info &rgs){
   for(auto & c : settings.chrom){
     parse_reads_per_chrom_estF(settings, c, param_deam_rgs, rgs);
   }
-
-
 }
 
 
@@ -1927,6 +2039,9 @@ int main(int argc, char *argv[]) {
   time(&start_time);
   general_settings settings;
   args_parser(argc, argv, settings);
+
+  VERBOSE = settings.verbose;
+
   if(settings.analysis=="estF"){
     if(check_estF_args(settings)){
       print_help();
