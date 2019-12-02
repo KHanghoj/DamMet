@@ -16,6 +16,8 @@ PROGRAMS = DamMet
 CXXSRC = $(wildcard *.cpp)
 OBJ = $(CXXSRC:.cpp=.o)
 
+.PHONY = all clean clean_simple test 
+
 all: $(PROGRAMS)
 
 %.o: %.cpp version.hpp htslib/libhts.a nlopt/install/lib/libnlopt.a
@@ -32,17 +34,17 @@ DamMet: $(OBJ) htslib/libhts.a nlopt/install/lib/libnlopt.a
 
 
 
-htslib/libhts.a: htslib
-	make -C htslib
-
-htslib:
+htslib/README.md:
 	git clone git@github.com:KHanghoj/htslib.git
 
-nlopt-2.5.0/install/lib/libnlopt.a: nlopt
-	cd nlopt/ && mkdir -p build/  && cd build/ && cmake -DCMAKE_INSTALL_PREFIX=../install -DNLOPT_OCTAVE=Off -DNLOPT_MATLAB=Off -DNLOPT_GUILE=Off -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=../install/lib .. && make && make install && cd ../..
+htslib/libhts.a: htslib/README.md
+	make -C htslib
 
-nlopt:
+nlopt/README.md:
 	git clone git@github.com:KHanghoj/nlopt.git
+
+nlopt/install/lib/libnlopt.a: nlopt/README.md
+	cd nlopt/ && mkdir -p build/  && cd build/ && cmake -DCMAKE_INSTALL_PREFIX=../install -DNLOPT_OCTAVE=Off -DNLOPT_MATLAB=Off -DNLOPT_GUILE=Off -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=../install/lib .. && make && make install && cd ../..
 
 clean:
 	rm -f DamMet
@@ -54,3 +56,8 @@ clean:
 clean_simple:
 	rm -f DamMet
 	rm -f ./*.o ./*.d version.hpp
+
+
+
+test: DamMet
+	./DamMet

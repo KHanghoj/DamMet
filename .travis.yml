@@ -1,0 +1,42 @@
+# # language: c++
+# # compiler:
+# #   - clang++
+# #   - g++
+# # image: ubuntu
+# image: node:latest
+# before_script:
+#   - echo `pwd`
+#   - apt-get update -qq && apt-get install -y liblzma-dev libbz2-dev libz-dev git g++ build-essential cmake libcurl4-openssl-dev
+
+# my_deammeth_test:
+#   script: 
+#     #- find . 
+#     - make -f Makefile
+  
+  
+# Control file for continuous integration testing at http://travis-ci.org/
+# taken from samtools
+language: c
+compiler:
+  - gcc
+
+# matrix:
+#   include:
+#     # An unoptimised C99 build, for detecting non-static inline functions
+#     - compiler: gcc
+#       env: CFLAGS="-std=gnu99 -O0"
+addons:
+  apt:
+    packages:
+    - liblzma-dev
+    - libbz2-dev
+    - libz-dev
+    - git
+    ## - g++
+    - build-essential
+    - cmake
+    - libcurl4-openssl-dev      
+
+script: 
+  - make
+  - make test
