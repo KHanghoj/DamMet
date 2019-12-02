@@ -28,8 +28,8 @@ double BASE_FREQ_FLAT_PRIOR = 0.25;
 double DINUCL_FLAT_PRIOR = 1.0/7.0;
 
 std::string UNKNOWN_RG("UNKNOWN");
-std::string ALL_RG("ALL_DEAMMETH");
-size_t ALL_DEAMMETH_RG_IDX = 0;
+std::string ALL_RG("ALL_DAMMET");
+size_t ALL_DAMMET_RG_IDX = 0;
 
 size_t do_haploid_model = 0;
 

@@ -1,9 +1,6 @@
-deammeth
 htslib
 DamMet
-nlopt-2.5.0
-v2.5.0.tar.gz
+nlopt
 *.d
 *.o
-a.out
 version.hpp

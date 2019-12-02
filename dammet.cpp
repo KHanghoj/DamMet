@@ -14,7 +14,7 @@
 #include <memory>
 #include <vector>
 
-#include "dammet_dam_params.hpp"
+#include "dammet.hpp"
 #include "nlopt.hpp"
 // #include "/home/krishang/Desktop/test2/DamMet/nlopt-2.5.0/install/include/nlopt.h"
 
@@ -1602,7 +1602,7 @@ int check_and_align_read(general_settings &settings,
       }
     } else {
       read_rg.rgname=ALL_RG;
-      read_rg.rgname_idx=ALL_DEAMMETH_RG_IDX;
+      read_rg.rgname_idx=ALL_DAMMET_RG_IDX;
     }
     d=align_read(rd, ref);
     return 0;
@@ -1852,7 +1852,7 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
       settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
       print_log(settings);
-      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
       param_deam_rgs[i] = load_deamrates_f(settings);
     } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
       settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
@@ -1884,7 +1884,7 @@ void estF(general_settings & settings, rgs_info &rgs){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
       settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
       print_log(settings);
-      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. Deammeth does not check that" << '\n';
+      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
       param_deam_rgs[i] = load_deamrates_f(settings);
     } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
       settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
