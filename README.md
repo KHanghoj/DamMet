@@ -1,5 +1,7 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/dammet/README.html)
 
+[![Build Status](https://travis-ci.org/KHanghoj/DamMet.svg?branch=master)](https://travis-ci.org/KHanghoj/DamMet)
+
 
 # DamMet, a full probabilistic model for mapping ancient methylomes #
 
