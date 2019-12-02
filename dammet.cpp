@@ -16,7 +16,10 @@
 
 #include "dammet.hpp"
 #include "nlopt.hpp"
-// #include "/home/krishang/Desktop/test2/DamMet/nlopt-2.5.0/install/include/nlopt.h"
+
+using v_un_ch = std::vector<unsigned char>;
+using keeplist_map = std::unordered_map<size_t, size_t>;
+
 
 bool VERBOSE=false;
 int READS = 1e6;
@@ -25,8 +28,7 @@ std::vector<double> LOG_PRIORS=GET_LOG_PRIOR_FLAT();
 // const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
 // const std::vector<double> PRIORS=get_prior();
 const dinucl_pair_of_pairs SEVEN_DINUCL_GENOTYPES = GENERATE_SEVEN_DINUCL_GENOTYPES();
-
-
+std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
 
 
 template <typename T>
@@ -89,20 +91,6 @@ inline T oplusInitnatl(const T & x,const T & y ){
       : y + std::log1p( std::exp( x-y ) )  ;
 }
 
-double phred_to_double(size_t & phred){
-  return std::pow(10, -((double)phred/10.0));
-}
-std::vector<double> phred_to_double_converter(){
-  std::vector<double> res;
-  for (size_t phred=0; phred<=MAX_PHRED; phred++){
-    res.push_back(phred_to_double(phred));
-  }
-  return res;
-}
-
-std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
-
-
 const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
   keeplist_map res;
   size_t counter = 0;
@@ -114,38 +102,6 @@ const keeplist_map get_cpg_chrom_pos(const char * ref, const size_t & seq_len){
   }
   return res;
 }
-
-// const std::vector<int> get_cpg_chrom_pos (const char * ref, const size_t & seq_len){
-//   size_t counter = 0;
-//   for (size_t i=0; i<seq_len-1; i++){
-//     if (refToInt[(int)ref[i]] == 1 && refToInt[(int)ref[i+1]] == 2){
-//       res.push_back(i);
-//     }
-//   }
-//   return res;
-// }
-
-// const v_un_ch get_c_and_cpg_chrom(const char * ref, const size_t & seq_len){
-//   v_un_ch res(seq_len, 0);
-//   for (size_t i=0; i<seq_len-1; i++){
-//     if (refToInt[(int)ref[i]] == 1){
-
-//       if (refToInt[(int)ref[i+1]] == 0){
-//         res[i] = 1;
-//         res[i+1] = 1;
-//       } else if (refToInt[(int)ref[i+1]] == 1){
-//         res[i] = 2;
-//         res[i+1] = 2;
-//       } else if (refToInt[(int)ref[i+1]] == 2){
-//         res[i] = 3;
-//         res[i+1] = 3
-//       } else if (refToInt[(int)ref[i+1]] == 3){
-
-//       }
-//     }
-//   }
-//   return res;
-// }
 
 const v_un_ch get_cpg_chrom(const char * ref, const size_t & seq_len, int &ncpgs){
   v_un_ch res(seq_len, 0);
@@ -175,15 +131,6 @@ void idx_to_params_tm_fast(const int & idx, std::vector<int> & res){
   res[6] = my_divmod(rem, B3_MULT, res[5]);
 }
 
-// std::vector<int> idx_to_params(const int & idx){
-//   std::div_t p = std::div(idx, READPOS_MULT);
-//   std::div_t pr = std::div(p.rem, PRIME_MULT);
-//   std::div_t strand = std::div(pr.rem, STRAND_MULT);
-//   std::div_t B1 = std::div(strand.rem, B1_MULT);
-//   std::div_t B2 = std::div(B1.rem, B2_MULT);
-//   std::div_t B3 = std::div(B2.rem, B3_MULT);
-//   return std::vector<int> {p.quot, pr.quot, strand.quot, B1.quot, B2.quot, B3.quot, B3.rem};
-// }
 
 template <typename T>
 std::vector<T> init_tallymat(const size_t & readpos){
@@ -1290,7 +1237,7 @@ void run_mle(general_settings & settings,
       second_der = objective_func_F_second_deriv(param[0], &void_stuff);
       error = 1.96/std::sqrt(-second_der);
 #elif 0
-      // bootstrapping
+      // bootstrapping of sites
       // reset param
       // sample indices and optimize
 #else

@@ -79,3 +79,15 @@ std::vector<double> GET_LOG_PRIOR_FLAT(){
   res[0] = std::log(1-0.001);
   return res;
 }
+
+
+double phred_to_double(size_t & phred){
+  return std::pow(10, -((double)phred/10.0));
+}
+std::vector<double> phred_to_double_converter(){
+  std::vector<double> res;
+  for (size_t phred=0; phred<=MAX_PHRED; phred++){
+    res.push_back(phred_to_double(phred));
+  }
+  return res;
+}

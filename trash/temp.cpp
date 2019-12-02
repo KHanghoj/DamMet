@@ -178,3 +178,49 @@ double calc_prob_obs_base(const double & seqerror, const size_t & base_compos, c
   }
   return res;
 }
+
+
+
+// const std::vector<int> get_cpg_chrom_pos (const char * ref, const size_t & seq_len){
+//   size_t counter = 0;
+//   for (size_t i=0; i<seq_len-1; i++){
+//     if (refToInt[(int)ref[i]] == 1 && refToInt[(int)ref[i+1]] == 2){
+//       res.push_back(i);
+//     }
+//   }
+//   return res;
+// }
+
+// const v_un_ch get_c_and_cpg_chrom(const char * ref, const size_t & seq_len){
+//   v_un_ch res(seq_len, 0);
+//   for (size_t i=0; i<seq_len-1; i++){
+//     if (refToInt[(int)ref[i]] == 1){
+
+//       if (refToInt[(int)ref[i+1]] == 0){
+//         res[i] = 1;
+//         res[i+1] = 1;
+//       } else if (refToInt[(int)ref[i+1]] == 1){
+//         res[i] = 2;
+//         res[i+1] = 2;
+//       } else if (refToInt[(int)ref[i+1]] == 2){
+//         res[i] = 3;
+//         res[i+1] = 3
+//       } else if (refToInt[(int)ref[i+1]] == 3){
+
+//       }
+//     }
+//   }
+//   return res;
+// }
+
+
+
+// std::vector<int> idx_to_params(const int & idx){
+//   std::div_t p = std::div(idx, READPOS_MULT);
+//   std::div_t pr = std::div(p.rem, PRIME_MULT);
+//   std::div_t strand = std::div(pr.rem, STRAND_MULT);
+//   std::div_t B1 = std::div(strand.rem, B1_MULT);
+//   std::div_t B2 = std::div(B1.rem, B2_MULT);
+//   std::div_t B3 = std::div(B2.rem, B3_MULT);
+//   return std::vector<int> {p.quot, pr.quot, strand.quot, B1.quot, B2.quot, B3.quot, B3.rem};
+// }
