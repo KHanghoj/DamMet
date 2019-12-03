@@ -31,7 +31,10 @@ std::string UNKNOWN_RG("UNKNOWN");
 std::string ALL_RG("ALL_DAMMET");
 size_t ALL_DAMMET_RG_IDX = 0;
 
-size_t do_haploid_model = 0;
+// for random sampling with replacement
+std::random_device rd;  //Will be used to obtain a seed for the random number engine
+std::mt19937 rn_generator(rd()); //Standard mersenne_twister_engine seeded with rd()
+
 
 
 using unint = unsigned int;

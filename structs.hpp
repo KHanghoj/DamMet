@@ -1,3 +1,7 @@
+// NEW structs
+
+using unint = unsigned int;
+
 /// STRUCTS
 struct my_cov_rg {
   size_t nocpg=0, cpg=0;
@@ -13,9 +17,6 @@ struct alignment_data {
 };
 
 
-// NEW structs
-
-using unint = unsigned int;
 
 struct ObsF {
   ObsF(const double &_M,
@@ -104,7 +105,6 @@ struct per_mle_run {
 
 } ;
 
-
 struct rgs_info {
   bool rg_split=false;
   std::vector<std::string> rgs;
@@ -135,5 +135,9 @@ struct F_void {
     settings = _s;
     to_include = std::move(_m);
     iteration = 0;
+  }
+
+  F_void(std::vector<std::unique_ptr<Site_s>> & _m){
+    to_include = std::move(_m);
   }
 };

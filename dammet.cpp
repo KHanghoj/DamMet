@@ -13,15 +13,27 @@
 #include <utility> // pair
 #include <memory>
 #include <vector>
+#include <random>
+#include <numeric> // accumulate
 
-#include "dammet.hpp"
+#include "zlib.h"
+#include "htslib/faidx.h"
+#include "htslib/hts.h"
+#include "htslib/sam.h"
+
+#include "file_handling.hpp"
+#include "load_fasta.hpp"
+#include "nucl_conv.hpp"
+#include "myargparser.hpp"
+#include "constants.hpp"
+#include "structs.hpp"
 #include "nlopt.hpp"
 
 using v_un_ch = std::vector<unsigned char>;
 using keeplist_map = std::unordered_map<size_t, size_t>;
 
 
-bool VERBOSE=false;
+bool VERBOSE = false;
 int READS = 1e6;
 std::vector<double> LOG_PRIORS=GET_LOG_PRIOR_FLAT();
 // const std::vector<double> LOG_PRIORS=get_log_prior_flat();
@@ -1140,6 +1152,7 @@ void run_mle(general_settings & settings,
   std::vector<double>  last_param;
   nlopt::result last_result;
   double last_error;
+  double last_minimum_param, last_maximum_param;
   size_t last_iterations;
 
   // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
@@ -1227,22 +1240,59 @@ void run_mle(general_settings & settings,
     std::vector<double> param (1, SMALLTOLERANCE);
     nlopt::result result;
     double second_der, error;
+    double minimum_param, maximum_param;
     size_t iterations;
 
     if(! same){
       F_void void_stuff(&settings, mle_run.to_include);
       opt.set_max_objective(objective_func_F, &void_stuff);
       result = opt.optimize(param, minf);
-#if 1
+#if 0
       second_der = objective_func_F_second_deriv(param[0], &void_stuff);
       error = 1.96/std::sqrt(-second_der);
-#elif 0
-      // bootstrapping of sites
-      // reset param
-      // sample indices and optimize
+      minimum_param = param[0]-error;
+      maximum_param = param[0]+error;
+#elif 1
+      int nboots=1000;
+      std::vector<std::unique_ptr<Site_s>> boots;
+      std::uniform_int_distribution<int> dis(0, mle_run.positions.size()-1);
+      boots.reserve(mle_run.positions.size());
+      double mean_boot, var_boot, sd_boot;
+      std::vector<double> boot_res;
+      // std::cerr << mle_run.positions.size() << '\n';
+      for (size_t nb=0; nb<nboots; nb++){
+        for (size_t ns=0; ns<mle_run.positions.size(); ns++){
+          int boot_idx = dis(rn_generator);
+          boots.emplace_back(std::make_unique<Site_s>(*void_stuff.to_include[boot_idx]));
+        }
+        F_void void_stuff_boot(boots);
+        std::vector<double> param_boot (1, SMALLTOLERANCE);
+        double minf_boot;
+        nlopt::result result_boot;
+
+        opt.set_max_objective(objective_func_F, &void_stuff_boot);
+        result = opt.optimize(param_boot, minf_boot);
+        // std::cerr << nb << " " << minf_boot << " " << param_boot[0] << '\n';
+        boot_res.push_back(param_boot[0]);
+        boots.clear();
+
+      }
+
+      mean_boot = std::accumulate(boot_res.begin(), boot_res.end(), 0.0) / boot_res.size();
+      for(auto &val: boot_res)
+        var_boot += std::pow(val-mean_boot,2);
+
+      var_boot /= boot_res.size();
+
+      sd_boot = std::sqrt(var_boot);
+      // std::cerr << param[0] << " " << mean_boot << " " << sd_boot << '\n';
+      minimum_param = param[0] - sd_boot;
+      maximum_param = param[0] + sd_boot;
+      // exit(0);
 #else
-      second_der =0;
-      error =0;
+      minimum_param = param[0]
+      maximum_param = param[0]
+
 #endif
       iterations=void_stuff.iteration;
 
@@ -1250,13 +1300,15 @@ void run_mle(general_settings & settings,
       last_minf = minf;
       last_param = param;
       last_result = result;
-      last_error = error;
+      last_minimum_param = minimum_param;
+      last_maximum_param = maximum_param;
       last_iterations = iterations;
     } else {
       minf = last_minf;
       param = last_param;
       result = last_result;
-      error = last_error;
+      minimum_param = last_minimum_param;
+      maximum_param = last_maximum_param;
       iterations = last_iterations;
     }
 
@@ -1302,7 +1354,7 @@ void run_mle(general_settings & settings,
       << " " << mle_run.max_pos - mle_run.min_pos
       << " " << minf
       << " " << param[0]
-      << " " << param[0]-error  << "," <<  param[0]+error
+      << " " << minimum_param  << "," <<  maximum_param
       << " " << iterations
       << " " << result;
     if(VERBOSE){
