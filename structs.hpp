@@ -141,3 +141,25 @@ struct F_void {
     to_include = std::move(_m);
   }
 };
+
+
+// multi thread
+struct job_deamrates {
+
+  job_deamrates(rgs_info &_rgs){
+    rgs = _rgs;
+    tm.resize(rgs.n);
+    cpg_data.resize(rgs.n);
+    nocpg_data.resize(rgs.n);
+    cov_rg.resize(rgs.n);
+  }
+
+  void add_chrom(std::string &c){
+    chroms.push_back(c);
+  };
+  rgs_info rgs;
+  std::vector<std::vector<int>> tm;
+  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
+  std::vector<my_cov_rg> cov_rg;
+  std::vector<std::string> chroms;
+};

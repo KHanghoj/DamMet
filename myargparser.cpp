@@ -29,7 +29,9 @@ void print_help(){
   std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
   std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
-  std::cerr << "\t-> Skip CpG without data (-skip): " << std::endl;  
+  std::cerr << "\t-> Skip CpG without data (-skip): " << std::endl;
+  std::cerr << "\t-> Add all positions included in output file (-verbose): " << std::endl;
+  std::cerr << "\t-> set seed for bootstrap (-seed): " << std::endl;      
 }
 
 bool check_estF_args(general_settings & settings){
@@ -260,7 +262,17 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     if((*i) == "-verbose"){
       settings.verbose=true;
     }
+
+    if((*i) == "-seed"){
+      i++;
+      settings.seed=std::stoi(*i);
+    }
     
+    if((*i) == "-j"){
+      i++;
+      settings.nthreads=std::stoi(*i);
+    }
+
   }
 
 
@@ -269,7 +281,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     print_help();
     exit(EXIT_FAILURE);
   }
-
+  
   if(settings.outbase.empty()){
     settings.outbase="dammet_res";
     mkdir(settings.outbase.c_str(),0777);

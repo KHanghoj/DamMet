@@ -15,6 +15,7 @@
 #include <vector>
 #include <random>
 #include <numeric> // accumulate
+#include <thread>
 
 #include "zlib.h"
 #include "htslib/faidx.h"
@@ -894,7 +895,6 @@ void run_deamrates_optim(general_settings & settings,
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
   std::vector<double> param = single_array_parameters(settings.max_pos_to_end, tmf);
-
   // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
 
   deamrates_void void_stuff(&settings, cpg_data, nocpg_data);
@@ -1725,6 +1725,7 @@ int check_and_align_read(general_settings &settings,
     return 0;
 }
 
+
 void parse_reads_per_chrom_deamrates(general_settings & settings,
                                      std::string & chrom,
                                      std::vector<std::vector<int>> &tm,
@@ -1740,7 +1741,7 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
   int ncpgs=0;
 
   const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
-  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
+  // settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
 
   read_stats rs;
   read_group_info read_rg;
@@ -1764,13 +1765,21 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
   }
   time(&end_time_load_data);
 
-  settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
-    std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
-    ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
-    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
+  // settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
+  //   std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
+  //   ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
+  //   ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
 
-  print_log(settings);
+  // print_log(settings);
   bam_destroy1(rd);
+}
+
+void parse_deamrates_wrapper(general_settings & settings, job_deamrates &jb){
+  for(auto & c : jb.chroms){
+    parse_reads_per_chrom_deamrates(settings, c, jb.tm,
+                                    jb.cpg_data, jb.nocpg_data,
+                                    jb.rgs, jb.cov_rg);
+  }
 }
 
 
@@ -1920,43 +1929,117 @@ void chrom_in_bam(const general_settings &settings){
   compare_chroms(settings, ref_names, settings.bam_fn);
 }
 
+void merge_threads_deamrates(std::vector<job_deamrates> &jobs, job_deamrates & res){
+  for(auto &j:jobs){
+    for (size_t i=0; i<res.rgs.n; i++){
+
+      // tally counts
+      for (size_t ii=0; ii<j.tm[i].size(); ii++)
+        res.tm[i][ii] += j.tm[i][ii];
+
+      // coverage
+      res.cov_rg[i].nocpg +=  j.cov_rg[i].nocpg;
+      res.cov_rg[i].cpg +=  j.cov_rg[i].cpg;
+
+      res.cpg_data[i].insert(res.cpg_data[i].end(),
+                  std::make_move_iterator(j.cpg_data[i].begin()),
+                  std::make_move_iterator(j.cpg_data[i].end()));
+      res.nocpg_data[i].insert(res.nocpg_data[i].end(),
+                  std::make_move_iterator(j.nocpg_data[i].begin()),
+                  std::make_move_iterator(j.nocpg_data[i].end()));
+    }
+  }
+}
+
+job_deamrates compute_multithreading_deamrates(general_settings & settings, rgs_info &rgs){
+  size_t block = settings.nthreads==1?settings.chrom.size(): settings.chrom.size() / settings.nthreads;
+
+  std::vector<job_deamrates> jobs;
+  size_t curr_chrom_idx=0;
+  for(size_t i=0; i<settings.nthreads; i++){
+    jobs.push_back(job_deamrates(rgs));
+    for (size_t iii=0; iii<rgs.n; iii++)
+      jobs[i].tm[iii] = init_tallymat<int>(settings.max_pos_to_end);
+
+    int chrom_idx =i*block;
+    for(size_t ii=chrom_idx; ii<(chrom_idx+block) && ii<settings.chrom.size(); ii++){
+      jobs[i].chroms.push_back(settings.chrom[ii]);
+      curr_chrom_idx++;
+    }
+  }
+  size_t n_extra = settings.chrom.size() % settings.nthreads;
+  if(n_extra){
+    std::cerr << "\t-> Adding remaining chromosomes " << n_extra << '\n';
+
+    while (n_extra){
+
+      jobs[jobs.size()-n_extra].chroms.push_back(settings.chrom[curr_chrom_idx]);
+      curr_chrom_idx++;
+      n_extra--;
+    }
+  }
+#if 0
+  std::cerr << settings.chrom.size() << std::endl;
+  std::cerr << "entering" << '\n';
+  for(size_t i=0; i<settings.nthreads; i++){
+    int chrom_idx =i*block;
+    for(size_t ii=0; ii<jobs[i].chroms.size(); ii++){
+      std::cerr << i << " " << ii <<  " " << jobs[i].chroms[ii] << '\n';;
+    }
+  }
+  std::cerr << std::flush;
+  exit(0);
+#endif
+
+
+
+  std::vector<std::thread> threads;
+  for(size_t i=0; i<settings.nthreads; i++){
+    // std::thread a threadobj(parse_deamrates_wrapper, jobs[i]);
+    // threads.push_back(std::move(a));
+    threads.push_back(std::thread(parse_deamrates_wrapper, std::ref(settings), std::ref(jobs[i])));
+  }
+
+  for(size_t i=0; i<settings.nthreads; i++){
+    if(threads[i].joinable())
+      threads[i].join();
+
+  }
+
+  job_deamrates res(rgs);
+  for (size_t iii=0; iii<rgs.n; iii++)
+      res.tm[iii] = init_tallymat<int>(settings.max_pos_to_end);
+
+  merge_threads_deamrates(jobs, res);
+  return(res);
+
+}
+
+
 void estdeam(general_settings & settings, rgs_info &rgs) {
   print_log(settings);
+  time_t mu_st, mu_et;
+  time(&mu_st);
+  job_deamrates merged = compute_multithreading_deamrates(settings, rgs);
+  time(&mu_et);
+  double mu_tg = difftime(mu_et, mu_st);
 
-  std::vector<std::vector<double>> tmf;
-  tmf.resize(rgs.n);
-  std::vector<std::vector<int>> tm;
-  tm.resize(rgs.n);
-  for (size_t i=0; i<rgs.n; i++){
-    tm[i] = init_tallymat<int>(settings.max_pos_to_end);
-  }
-
-  std::vector<uni_ptr_obs> cpg_data, nocpg_data;
-  cpg_data.resize(rgs.n);
-  nocpg_data.resize(rgs.n);
-
-  std::vector<my_cov_rg> cov_rg;
-  cov_rg.resize(rgs.n);
-
-  // https://github.com/gatoravi/bam-parser-tutorial/blob/master/parse_bam.cc
-  for(auto & c : settings.chrom){
-    parse_reads_per_chrom_deamrates(settings, c, tm,
-                                     cpg_data, nocpg_data,
-                                     rgs, cov_rg);
-  }
-
-
+  std::cerr << "\t-> Done loading " << settings.chrom.size() << " chromosomes in " << mu_tg << " seconds." << '\n';
   for (size_t i=0; i<rgs.n; i++){
     settings.buffer += "\t-> Total_Observations RG: "+ rgs.rgs[i] +
-      " CpG/cnonCpG: " + std::to_string(cov_rg[i].cpg) + " " + std::to_string(cov_rg[i].nocpg) + '\n';
+      " CpG/cnonCpG: " + std::to_string(merged.cov_rg[i].cpg) + " " + std::to_string(merged.cov_rg[i].nocpg) + '\n';
     print_log(settings);
   }
 
+  // exit(0);
+  std::vector<std::vector<double>> tmf;
+  tmf.resize(rgs.n);
   // dumping counts to file
   for (size_t i=0; i<rgs.n; i++){
-    settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + rgs.rgs[i] +  ".tallycounts" + '\n';
+
+    settings.buffer += "\t-> Dumping count file: " + settings.outbase + "." + merged.rgs.rgs[i] +  ".tallycounts" + '\n';
     print_log(settings);
-    dump_count_file(settings, tm[i], rgs.rgs[i]);
+    dump_count_file(settings, merged.tm[i], rgs.rgs[i]);
     tmf[i] = read_count_file(settings, rgs.rgs[i]);
   }
 
@@ -1966,25 +2049,27 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
 
   for (size_t i=0; i<rgs.n; i++){
     if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-      settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
-      print_log(settings);
-      std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
-      param_deam_rgs[i] = load_deamrates_f(settings);
-    } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
-      settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
-      print_log(settings);
-      param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
+    //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
+    //   print_log(settings);
+    //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
+    //   param_deam_rgs[i] = load_deamrates_f(settings);
+    // } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
+    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
+    //   print_log(settings);
+    //   param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
     }else {
       settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
       print_log(settings);
+
 #if 0
-      print_data(cpg_data[i], nocpg_data[i]);
+      print_data(merged.cpg_data[i], merged.nocpg_data[i]);
 #endif
-      run_deamrates_optim(settings, tmf[i], cpg_data[i], nocpg_data[i], rgs.rgs[i]);
+
+      run_deamrates_optim(settings, tmf[i], merged.cpg_data[i], merged.nocpg_data[i], rgs.rgs[i]);
       settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
       print_log(settings);
       param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
-  }
+    }
   }
   settings.args_stream << std::flush;
 }
@@ -2040,6 +2125,18 @@ int main(int argc, char *argv[]) {
   args_parser(argc, argv, settings);
 
   VERBOSE = settings.verbose;
+
+  if(settings.seed != std::numeric_limits<size_t>::max()){
+    rn_generator.seed(settings.seed);
+  }
+
+  if(settings.nthreads > settings.chrom.size()){
+    std::cerr << "\t-> Less contigs than threads. Reducing nthreads." << '\n';
+    settings.nthreads = settings.chrom.size();
+  }
+
+  settings.buffer = "\t-> nthreads: " + std::to_string(settings.nthreads) + '\n';
+  print_log(settings);
 
   if(settings.analysis=="estF"){
     if(check_estF_args(settings)){
