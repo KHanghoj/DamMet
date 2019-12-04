@@ -1247,12 +1247,12 @@ void run_mle(general_settings & settings,
       F_void void_stuff(&settings, mle_run.to_include);
       opt.set_max_objective(objective_func_F, &void_stuff);
       result = opt.optimize(param, minf);
-#if 0
+#if 1
       second_der = objective_func_F_second_deriv(param[0], &void_stuff);
       error = 1.96/std::sqrt(-second_der);
       minimum_param = param[0]-error;
       maximum_param = param[0]+error;
-#elif 1
+#elif 0
       int nboots=1000;
       std::vector<std::unique_ptr<Site_s>> boots;
       std::uniform_int_distribution<int> dis(0, mle_run.positions.size()-1);
