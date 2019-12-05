@@ -6,7 +6,6 @@
 #include <fstream>  // open file
 #include <iostream> // stdout/stdin/stderr
 #include <random> // std::normal_distribution;
-#include <signal.h>  // catching signal interrupt
 #include <sstream> //stringstream
 #include <string>
 #include <unordered_map>
@@ -16,6 +15,8 @@
 #include <random>
 #include <numeric> // accumulate
 #include <thread>
+#include <mutex>
+
 
 #include "zlib.h"
 #include "htslib/faidx.h"
@@ -33,9 +34,11 @@
 using v_un_ch = std::vector<unsigned char>;
 using keeplist_map = std::unordered_map<size_t, size_t>;
 
-
 bool VERBOSE = false;
 int READS = 1e6;
+
+std::mutex mtx;
+
 std::vector<double> LOG_PRIORS=GET_LOG_PRIOR_FLAT();
 // const std::vector<double> LOG_PRIORS=get_log_prior_flat();
 // const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
@@ -70,6 +73,7 @@ void print_data(uni_ptr_obs &cpg_data,
   for (auto &x: cpg_data){
     print_struct(x, std::cout);
   }
+
   for (auto &x: nocpg_data){
     print_struct(x, std::cout);
   }
@@ -548,11 +552,12 @@ void calc_M_noM(general_settings &settings,
       seqerror2 = PHRED_TO_PROB_CONVERTER[d.t_qs[boi]];
       base1 = d.t_seq[boi-1];
       base2 = d.t_seq[boi];
+
 #if 0
       std::cerr << d.t_positions[boi-1] << '\n';
 #endif
-      cpg_idx = cpg_map.at(d.t_positions[boi-1]);
 
+      cpg_idx = cpg_map.at(d.t_positions[boi-1]);
       s = &cpg_data[cpg_idx];
       cov_rg.cpg++;
       anydata=true;
@@ -1398,8 +1403,10 @@ void run_mle_bed(general_settings & settings,
                  std::vector<Site_s> & cpg_data) {
   std::vector<std::pair<size_t, size_t>> bed_coord = parse_bed_file(settings.bed_f,  chrom);
   std::string filename = settings.outbase + "." + chrom + ".BED.F";
+  mtx.lock();
   settings.buffer += "\t-> Dumping MLE of F to " + filename + '\n';
   print_log(settings);
+  mtx.unlock();
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
 
@@ -1741,12 +1748,11 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
   int ncpgs=0;
 
   const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
-  // settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
+
 
   read_stats rs;
   read_group_info read_rg;
   alignment_data d;
-  print_log(settings);
   bam1_t *rd = bam_init1();
 
   time_t start_time_load_data,end_time_load_data;
@@ -1764,12 +1770,14 @@ void parse_reads_per_chrom_deamrates(general_settings & settings,
                      rgs.cycles[read_rg.rgname_idx]);
   }
   time(&end_time_load_data);
-
-  // settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
-  //   std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
-  //   ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
-  //   ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
-
+  mtx.lock();
+  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
+  settings.buffer += "\t-> Chrom: " + chrom + ". Processed: " +
+    std::to_string(rs.counter)  + ". Reads filtered: " + std::to_string(rs.trashed) +
+    ". Reads skipped (nocpg overlap): " + std::to_string(rs.reads_skipped) +
+    ". Loaded in " + std::to_string(difftime(end_time_load_data, start_time_load_data)) + " seconds." + '\n';
+  print_log(settings);
+  mtx.unlock();
   // print_log(settings);
   bam_destroy1(rd);
 }
@@ -1806,8 +1814,6 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   int ncpgs=0;
   // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
   const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
-  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
-  print_log(settings);
 
   read_stats rs;
   read_group_info read_rg;
@@ -1843,13 +1849,15 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   }
   time(&end_time_load_data);
 
+  mtx.lock();
+  settings.buffer += "\t-> " + std::to_string(ncpgs) + " CpG's in chrom: " + chrom + '\n';
   for (size_t i=0; i<rgs.n; i++){
-     settings.buffer = "\t-> Total_Observations RG: " + rgs.rgs[i] + " CpG obs: " +
+     settings.buffer += "\t-> Total_Observations RG: " + rgs.rgs[i] + " CpG obs: " +
        std::to_string(cov_rg[i].cpg) + " CpGCoverage: " +
        std::to_string((double)cov_rg[i].cpg/(double)ncpgs) + '\n';
-     print_log(settings);
   }
-
+  print_log(settings);
+  mtx.unlock();
   // adding priors to all alt genotypes.
   for(auto & s: cpg_data){
     for (size_t dinucl_idx=1; dinucl_idx<SEVEN_DINUCL_GENOTYPES.size(); dinucl_idx++){
@@ -1857,11 +1865,15 @@ void parse_reads_per_chrom_estF(general_settings & settings,
     }
   }
 
+
   if(settings.skip_empty_cpg){
+    mtx.lock();
     cpg_data = remove_cpg_wo_data(cpg_data);
     settings.buffer = "\t-> Skip CpGs without data. CpGs remaining: " + std::to_string(cpg_data.size()) + '\n';
     print_log(settings);
+    mtx.unlock();
   }
+
 
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
@@ -1872,6 +1884,13 @@ void parse_reads_per_chrom_estF(general_settings & settings,
 
   bam_destroy1(rd);
 }
+
+void parse_fest_wrapper(general_settings & settings, job_fest &jb){
+  for(auto & c : jb.chroms){
+    parse_reads_per_chrom_estF(settings, c, jb.param_deam_rgs, jb.rgs);
+  }
+}
+
 
 
 void compare_chroms(const general_settings &settings,
@@ -1953,7 +1972,6 @@ void merge_threads_deamrates(std::vector<job_deamrates> &jobs, job_deamrates & r
 
 job_deamrates compute_multithreading_deamrates(general_settings & settings, rgs_info &rgs){
   size_t block = settings.nthreads==1?settings.chrom.size(): settings.chrom.size() / settings.nthreads;
-
   std::vector<job_deamrates> jobs;
   size_t curr_chrom_idx=0;
   for(size_t i=0; i<settings.nthreads; i++){
@@ -2048,28 +2066,15 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
   settings.args_stream << std::flush;
 
   for (size_t i=0; i<rgs.n; i++){
-    if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
-    //   settings.buffer += "\t-> Loading deamination rates from " + settings.deamrates_filename + '\n';
-    //   print_log(settings);
-    //   std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
-    //   param_deam_rgs[i] = load_deamrates_f(settings);
-    // } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
-    //   settings.buffer += "\t-> Loading deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
-    //   print_log(settings);
-    //   param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
-    }else {
-      settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
-      print_log(settings);
+    settings.buffer += "\t-> Starting Optim of deamination rates. RG: " + rgs.rgs[i] + '\n';
+    print_log(settings);
 
 #if 0
-      print_data(merged.cpg_data[i], merged.nocpg_data[i]);
+    print_data(merged.cpg_data[i], merged.nocpg_data[i]);
 #endif
-
-      run_deamrates_optim(settings, tmf[i], merged.cpg_data[i], merged.nocpg_data[i], rgs.rgs[i]);
-      settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
-      print_log(settings);
-      param_deam_rgs[i] = load_deamrates(settings, rgs.rgs[i]);
-    }
+    run_deamrates_optim(settings, tmf[i], merged.cpg_data[i], merged.nocpg_data[i], rgs.rgs[i]);
+    settings.buffer += "\t-> Dumping deamination parameters to " + settings.outbase+"."+rgs.rgs[i]+".deamrates" + '\n';
+    print_log(settings);
   }
   settings.args_stream << std::flush;
 }
@@ -2112,8 +2117,39 @@ void estF(general_settings & settings, rgs_info &rgs){
 
 
 
-  for(auto & c : settings.chrom){
-    parse_reads_per_chrom_estF(settings, c, param_deam_rgs, rgs);
+  size_t block = settings.nthreads==1?settings.chrom.size(): settings.chrom.size() / settings.nthreads;
+  std::vector<job_fest> jobs;
+  size_t curr_chrom_idx=0;
+  for(size_t i=0; i<settings.nthreads; i++){
+    jobs.push_back(job_fest(rgs, param_deam_rgs));
+
+    int chrom_idx =i*block;
+    for(size_t ii=chrom_idx; ii<(chrom_idx+block) && ii<settings.chrom.size(); ii++){
+      jobs[i].chroms.push_back(settings.chrom[ii]);
+      curr_chrom_idx++;
+    }
+  }
+  size_t n_extra = settings.chrom.size() % settings.nthreads;
+  if(n_extra){
+    std::cerr << "\t-> Adding remaining chromosomes " << n_extra << '\n';
+
+    while (n_extra){
+      jobs[jobs.size()-n_extra].chroms.push_back(settings.chrom[curr_chrom_idx]);
+      curr_chrom_idx++;
+      n_extra--;
+    }
+  }
+
+  std::vector<std::thread> threads;
+  for(size_t i=0; i<settings.nthreads; i++){
+    // std::thread a threadobj(parse_deamrates_wrapper, jobs[i]);
+    // threads.push_back(std::move(a));
+    threads.push_back(std::thread(parse_fest_wrapper, std::ref(settings), std::ref(jobs[i])));
+  }
+
+  for(auto &thread: threads){
+    if(thread.joinable())
+      thread.join();
   }
 }
 
@@ -2135,9 +2171,6 @@ int main(int argc, char *argv[]) {
     settings.nthreads = settings.chrom.size();
   }
 
-  settings.buffer = "\t-> nthreads: " + std::to_string(settings.nthreads) + '\n';
-  print_log(settings);
-
   if(settings.analysis=="estF"){
     if(check_estF_args(settings)){
       print_help();
@@ -2155,6 +2188,9 @@ int main(int argc, char *argv[]) {
     checkfilehandle<std::ofstream>(settings.args_stream, stream_filename);
   }
 
+  settings.buffer += "\t-> nthreads: " + std::to_string(settings.nthreads) + '\n';
+  print_log(settings);
+  // print general info to args file.
 
   rgs_info rgs;
 
@@ -2175,6 +2211,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::cerr << "\t-> DamMet started: " << ctime(&start_time);
+
   // check that chromosome is in .fai and .bam
   chrom_in_bam(settings);
   chrom_in_fai(settings);
@@ -2187,9 +2224,28 @@ int main(int argc, char *argv[]) {
     print_log(settings);
     estF(settings, rgs);
   } else {
-    settings.buffer += "\t-> Estimating Deamination rates (D)\n";
-    print_log(settings);
-    estdeam(settings, rgs);
+    size_t files_avail = 0;
+    for (size_t i=0; i<rgs.n; i++){
+
+      if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
+        settings.buffer += "\t-> As deamination profiles are provided to -D run 'estF' to estimate methylation levels\n" ;
+        print_log(settings);
+        std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
+        files_avail++;
+      } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
+        settings.buffer += "\t-> Deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates are available" + '\n';
+        print_log(settings);
+        files_avail++;
+      }
+    }
+
+    if(files_avail != rgs.n){
+      settings.buffer += "\t-> Estimating Deamination rates (D)\n";
+      print_log(settings);
+      estdeam(settings, rgs);
+    } else {
+      std::cerr << "\t-> Deamination rates are already calculated. Please, delete the files if you want to recalculate the deamination rates.\n";
+    }
   }
 
 

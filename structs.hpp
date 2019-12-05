@@ -163,3 +163,19 @@ struct job_deamrates {
   std::vector<my_cov_rg> cov_rg;
   std::vector<std::string> chroms;
 };
+
+
+struct job_fest {
+
+  job_fest(rgs_info &_rgs, std::vector<std::vector<double>> &_param_deam_rgs){
+    rgs = _rgs;
+    param_deam_rgs = _param_deam_rgs;
+  }
+
+  void add_chrom(std::string &c){
+    chroms.push_back(c);
+  };
+  rgs_info rgs;
+  std::vector<std::vector<double>> param_deam_rgs;
+  std::vector<std::string> chroms;
+};
