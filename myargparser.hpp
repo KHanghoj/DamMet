@@ -29,6 +29,7 @@ struct general_settings{
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;
+  size_t nboots=0;
   size_t cycles, minreadlength, minreadlength_deam;
   size_t seed;
   size_t windowsize, max_cpgs;

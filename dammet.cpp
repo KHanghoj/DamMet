@@ -1135,16 +1135,67 @@ void print_header(std::ofstream &f, const std::string & l){
   f<<l;
 }
 
+boot_res_s calc_boots_f(general_settings & settings,  per_mle_run &mle_run,  F_void &void_stuff){
+  nlopt::opt opt(nlopt::LD_MMA, 1);
+  setup_mma(opt);
+
+  std::vector<std::unique_ptr<Site_s>> boots;
+  std::uniform_int_distribution<int> dis(0, mle_run.positions.size()-1);
+  boots.reserve(mle_run.positions.size());
+  std::vector<double> boot_res;
+
+  for (size_t nb=0; nb<settings.nboots; nb++){
+    for (size_t ns=0; ns<mle_run.positions.size(); ns++){
+      size_t site_idx = dis(rn_generator);
+      boots.emplace_back(std::make_unique<Site_s>(*void_stuff.to_include[site_idx]));
+    }
+
+    F_void void_stuff_boot(boots);
+    std::vector<double> param_boot (1, SMALLTOLERANCE);
+    double minf_boot;
+
+    opt.set_max_objective(objective_func_F, &void_stuff_boot);
+    nlopt::result result_boot = opt.optimize(param_boot, minf_boot);
+    // std::cerr << nb << " " << minf_boot << " " << param_boot[0] << '\n';
+    boot_res.push_back(param_boot[0]);
+    boots.clear();
+  }
+  // calc summary statistics
+  boot_res_s a;
+  a.mean_boot = std::accumulate(boot_res.begin(), boot_res.end(), 0.0) / boot_res.size();
+  for(auto &val: boot_res)
+    a.var_boot += std::pow(val-a.mean_boot,2);
+  a.var_boot /= boot_res.size();
+  a.sd_boot = std::sqrt(a.var_boot);
+  return (a);
+}
+
+void check_param_space(double &minimum_param, double &maximum_param){
+  if(minimum_param<0)
+    minimum_param=0;
+
+  if(maximum_param>1)
+    maximum_param = 1;
+}
+
+
 void run_mle(general_settings & settings,
              std::string & chrom,
              std::vector<Site_s> & cpg_data) {
 
   std::string filename = settings.outbase + "." + chrom + ".F";
+  mtx.lock();
   settings.buffer += "\t-> Dumping MLE of F to " + filename + '\n';
   print_log(settings);
+  mtx.unlock();
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
-  print_header(f, "center n_cpgs n_obs distance ll f f_95_conf iter opt_return_code");
+
+  if(settings.nboots)
+    print_header(f, "center n_cpgs n_obs distance ll f sd_boot iter opt_return_code");
+  else
+    print_header(f, "center n_cpgs n_obs distance ll f f_95_conf iter opt_return_code");
+
   if(VERBOSE)
     print_header(f, " incl_pos\n");
   else
@@ -1252,53 +1303,21 @@ void run_mle(general_settings & settings,
       F_void void_stuff(&settings, mle_run.to_include);
       opt.set_max_objective(objective_func_F, &void_stuff);
       result = opt.optimize(param, minf);
-#if 1
-      second_der = objective_func_F_second_deriv(param[0], &void_stuff);
-      error = 1.96/std::sqrt(-second_der);
-      minimum_param = param[0]-error;
-      maximum_param = param[0]+error;
-#elif 0
-      int nboots=1000;
-      std::vector<std::unique_ptr<Site_s>> boots;
-      std::uniform_int_distribution<int> dis(0, mle_run.positions.size()-1);
-      boots.reserve(mle_run.positions.size());
-      double mean_boot, var_boot, sd_boot;
-      std::vector<double> boot_res;
-      // std::cerr << mle_run.positions.size() << '\n';
-      for (size_t nb=0; nb<nboots; nb++){
-        for (size_t ns=0; ns<mle_run.positions.size(); ns++){
-          int boot_idx = dis(rn_generator);
-          boots.emplace_back(std::make_unique<Site_s>(*void_stuff.to_include[boot_idx]));
-        }
-        F_void void_stuff_boot(boots);
-        std::vector<double> param_boot (1, SMALLTOLERANCE);
-        double minf_boot;
-        nlopt::result result_boot;
 
-        opt.set_max_objective(objective_func_F, &void_stuff_boot);
-        result = opt.optimize(param_boot, minf_boot);
-        // std::cerr << nb << " " << minf_boot << " " << param_boot[0] << '\n';
-        boot_res.push_back(param_boot[0]);
-        boots.clear();
+      if(settings.nboots){
+        boot_res_s b_res = calc_boots_f(settings, mle_run, void_stuff);
+        minimum_param = param[0]-b_res.sd_boot;
+        maximum_param = param[0]+b_res.sd_boot;
+        check_param_space(minimum_param, maximum_param);
 
+      } else {
+        second_der = objective_func_F_second_deriv(param[0], &void_stuff);
+        error = 1.96/std::sqrt(-second_der);
+        minimum_param = param[0]-error;
+        maximum_param = param[0]+error;
+        check_param_space(minimum_param, maximum_param);
       }
 
-      mean_boot = std::accumulate(boot_res.begin(), boot_res.end(), 0.0) / boot_res.size();
-      for(auto &val: boot_res)
-        var_boot += std::pow(val-mean_boot,2);
-
-      var_boot /= boot_res.size();
-
-      sd_boot = std::sqrt(var_boot);
-      // std::cerr << param[0] << " " << mean_boot << " " << sd_boot << '\n';
-      minimum_param = param[0] - sd_boot;
-      maximum_param = param[0] + sd_boot;
-      // exit(0);
-#else
-      minimum_param = param[0]
-      maximum_param = param[0]
-
-#endif
       iterations=void_stuff.iteration;
 
       // assign params

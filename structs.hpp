@@ -143,6 +143,15 @@ struct F_void {
 };
 
 
+struct boot_res_s{
+
+  // boot_res(double &_m, double &_v, double &_s):
+  //   mean_boot(_m), var_boot(_v), sd_boot(_s) {}
+
+  double mean_boot=0, var_boot=0, sd_boot=0;
+};
+
+
 // multi thread
 struct job_deamrates {
 

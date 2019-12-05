@@ -255,7 +255,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       }
     }
 
-    if((*i) == "-skip"){
+    if((*i) == "-skip_empty_cpg"){
       settings.skip_empty_cpg=true;
     }
 
@@ -271,6 +271,11 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
     if((*i) == "-j"){
       i++;
       settings.nthreads=std::stoi(*i);
+    }
+
+    if((*i) == "-nboots"){
+      i++;
+      settings.nboots = std::stoi(*i);
     }
 
   }
@@ -309,8 +314,9 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Using readgroups from file (-R): " + settings.readgroups_f + '\n';
   ss += "\t-> Exclude sites (1-based) (-E): " + settings.exclude_sites_fn + '\n';
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
-  
+  ss += "\t-> -nboots " + std::to_string(settings.nboots) + '\n';
+  ss += "\t-> -skip_empty_cpg " + std::to_string(settings.skip_empty_cpg) + '\n';
   settings.buffer = ss;
-  // std::cerr << '\n' << ss;
+
 }
 
