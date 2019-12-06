@@ -29,9 +29,11 @@ void print_help(){
   std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
   std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
-  std::cerr << "\t-> Skip CpG without data (-skip): " << std::endl;
+  std::cerr << "\t-> Skip CpG without data (-skip_empty_cpg): " << std::endl;
   std::cerr << "\t-> Add all positions included in output file (-verbose): " << std::endl;
-  std::cerr << "\t-> set seed for bootstrap (-seed): " << std::endl;      
+  std::cerr << "\t-> set seed for bootstrap (-seed): " << std::endl;
+  std::cerr << "\t-> set nboots. If 0 (default) calculating error from double derivative of likelihood (-nboots): " << std::endl;
+  std::cerr << "\t-> set number of threads (-j): " << std::endl;
 }
 
 bool check_estF_args(general_settings & settings){
@@ -119,7 +121,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       if(check_file_exists(*i)){
          settings.chrom = parse_chrom_file(*i);
       }else{
-        std::cerr << "CHROM FILE DOES NOT EXISTS" << std::endl;
+        std::cerr << "CHROM (-cf) FILE DOES NOT EXISTS" << std::endl;
         exit(EXIT_FAILURE);        
       }
       ss += "\t-> Chromosome (-cf): " + (*i) + '\n';
@@ -316,6 +318,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
   ss += "\t-> -nboots " + std::to_string(settings.nboots) + '\n';
   ss += "\t-> -skip_empty_cpg " + std::to_string(settings.skip_empty_cpg) + '\n';
+  ss += "\t-> -verbose " + std::to_string(settings.verbose) + '\n';
   settings.buffer = ss;
 
 }

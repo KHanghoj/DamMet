@@ -2208,8 +2208,10 @@ int main(int argc, char *argv[]) {
   }
 
   settings.buffer += "\t-> nthreads: " + std::to_string(settings.nthreads) + '\n';
-  print_log(settings);
+
   // print general info to args file.
+  print_log(settings, false);
+
 
   rgs_info rgs;
 
@@ -2230,13 +2232,12 @@ int main(int argc, char *argv[]) {
   }
 
   std::cerr << "\t-> DamMet started: " << ctime(&start_time);
-
+  std::cerr << "\t-> See arguments in " << settings.outbase << "." << settings.analysis << ".args" << '\n';
   // check that chromosome is in .fai and .bam
   chrom_in_bam(settings);
   chrom_in_fai(settings);
 
-  // print options to args file
-  print_log(settings, false);
+  print_log(settings);
 
   if(settings.analysis=="estF"){
     settings.buffer += "\t-> Estimating methylation levels (f)\n";
@@ -2245,17 +2246,16 @@ int main(int argc, char *argv[]) {
   } else {
     size_t files_avail = 0;
     for (size_t i=0; i<rgs.n; i++){
-
       if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
         settings.buffer += "\t-> As deamination profiles are provided to -D run 'estF' to estimate methylation levels\n" ;
-        print_log(settings);
         std::cerr << "\t-> Make sure that the file contains the same number of pos to include. DamMet does not check that" << '\n';
         files_avail++;
       } else if (check_file_exists(settings.outbase+"."+rgs.rgs[i]+".deamrates")){
         settings.buffer += "\t-> Deamination rates from " + settings.outbase+"."+rgs.rgs[i]+".deamrates are available" + '\n';
-        print_log(settings);
+
         files_avail++;
       }
+      print_log(settings);
     }
 
     if(files_avail != rgs.n){
@@ -2263,7 +2263,8 @@ int main(int argc, char *argv[]) {
       print_log(settings);
       estdeam(settings, rgs);
     } else {
-      std::cerr << "\t-> Deamination rates are already calculated. Please, delete the files if you want to recalculate the deamination rates.\n";
+      settings.buffer += "\t-> Deamination rates are already calculated. Delete Deamination files or change OUTPUT (-O) directory prefix, if you want to recalculate the deamination rates.\n";
+      print_log(settings);
     }
   }
 
