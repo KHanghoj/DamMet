@@ -33,7 +33,7 @@ The two step procedure could look like this:
 
 ```bash
     ./DamMet estDEAM -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT_PREFIX}
-    ./DamMet estF -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT} -N ${NCPG}
+    ./DamMet estF -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT_PREFIX} -N ${NCPG}
 ```
 
 
