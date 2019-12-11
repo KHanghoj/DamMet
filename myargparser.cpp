@@ -8,32 +8,36 @@ void print_help(){
     "The first step obtains a Maximum Likelihood Estimate (MLE) of position-specific deamination "
     "rates at both methylated and unmethylated cytosine residues. The second step makes use "
     "of these estimates to recover a MLE of local methylation levels in a user-defined window size." << std::endl;
-  std::cerr << "One positional argument is required:\n" << std::endl;
+  std::cerr << "\nOne positional argument is required:\n" << std::endl;
   std::cerr << "'estDEAM' - estimates deamination rates\nor\n'estF' - estimates methylation level (f)" << std::endl;
-  std::cerr << "Three arguments are required:\n\t->-b (bam)\n\t->-r (reference "
-    "fasta)\n\t->-c (chromosome of interest)" << '\n';
-  std::cerr << "OPTIONS:" << std::endl;
-  std::cerr << "\t-> BED file (-B): " << std::endl;
-  std::cerr << "\t-> WindowSize (-W): " << std::endl;
-  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
+  std::cerr << "Three arguments are required:" << std::endl;
+  std::cerr << "\t-> BAM file (-b)" << std::endl;
+  std::cerr << "\t-> Reference genome in fasta format (-r)" << std::endl;
+  std::cerr << "\t-> Comma seperated list of chromosomes/contigs (-c) or path to file with chromosomes/contigs (-cf)" << std::endl;  
+  std::cerr << "GENERAL OPTIONS:" << std::endl;
+  std::cerr << "\t-> Number of threads (-j): " << std::endl;
   std::cerr << "\t-> minmapQ (-q): " << std::endl;
   std::cerr << "\t-> minbaseQ (-Q): " << std::endl;
   std::cerr << "\t-> MinReadLength (-L): " << std::endl;
-  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
   std::cerr << "\t-> Max_Pos_From_End (-P): " << std::endl;
   std::cerr << "\t-> Expected fraction of methylated CpGs (-M): " << std::endl;
   std::cerr << "\t-> Outbase (-O): " << std::endl;
   std::cerr << "\t-> readFlags (-F): " << std::endl;
-  std::cerr << "\t-> Number of cycles (-C) (Only used if no RG file is NOT provided): " << std::endl;
-  std::cerr << "\t-> Using Precalc deamination rates from (-D): " << std::endl;
   std::cerr << "\t-> Using readgroups from file (-R): " << std::endl;
   std::cerr << "\t-> Exclude sites (1-based) (-E): " << std::endl;
   std::cerr << "\t-> Exclude BED (-e): " << std::endl;
+  std::cerr << "\t-> MinReadLength_Deamrates (-l): " << std::endl;
+  std::cerr << "\t-> Number of cycles (-C): " << std::endl;
+  
+  std::cerr << "estF OPTIONS" << std::endl;
+  std::cerr << "\t-> BED file (-B): " << std::endl;
+  std::cerr << "\t-> WindowSize (-W): " << std::endl;
+  std::cerr << "\t-> Max CpGs per Window (-N): " << std::endl;
   std::cerr << "\t-> Skip CpG without data (-skip_empty_cpg): " << std::endl;
-  std::cerr << "\t-> Add all positions included in output file (-verbose): " << std::endl;
+  std::cerr << "\t-> Includes a list of CpGs in output file (-verbose): " << std::endl;
   std::cerr << "\t-> set seed for bootstrap (-seed): " << std::endl;
   std::cerr << "\t-> set nboots. If 0 (default) calculating error from double derivative of likelihood (-nboots): " << std::endl;
-  std::cerr << "\t-> set number of threads (-j): " << std::endl;
+  std::cerr << "\t-> Path to Precalc deamination rates from (-D) (if provided, no need to run estDEAM): " << std::endl;
 }
 
 bool check_estF_args(general_settings & settings){

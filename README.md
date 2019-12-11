@@ -8,7 +8,7 @@
 -------------------------------------------------------------------------------
 
 DamMet is probabilistic model for mapping ancient methylomes using sequencing data underlying an ancient specimen.
-The model is implemented as a two step procedure. The first step recovers a maximum likelihood estimate (MLE) of the position specific deamination rates for methylated and unmethylated cytosine residues. The second step, making use of these deamination rates, returns a MLE of the methylation level in a user-defined genomic window. The two step procedure as implemented in DamMet is fully 
+The model is implemented as a two step procedure. The first step recovers a maximum likelihood estimate (MLE) of the position specific deamination rates for methylated and unmethylated cytosine residues. The second step, making use of these deamination rates, returns a MLE of the methylation level in a user-defined genomic window. The software is multithreaded
 
 ## Installation ##
 DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet.
@@ -21,9 +21,25 @@ DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlo
 
 ## How to run DamMet ##
 
-DamMet takes three required arguments, a bam file (-b), a reference genome (-r), and the chromosome of interest (-c). To demonstrate that DamMet works and produces the expected output, we have made a small running example.
+DamMet requires a single positional argument (estDEAM or estF). estDEAM will estimate deamination profiles and estF estimates methylation levels. 
+
+In addition DamMet also requires three keyword arguments:
+- BAM file (-b)
+- Reference genome (-r)
+- a comma separated list of chromosomes/contigs (-c) or path to file with chromosomes/contigs (-cf).
+
+
+The two step procedure could look like this:
+
+```bash
+    ./DamMet estDEAM -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT_PREFIX}
+    ./DamMet estF -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT} -N ${NCPG}
+```
+
 
 ### Running example ###
+
+To demonstrate that DamMet works and produces the expected output, we have made a small running example.
 
 ``` bash
 git clone https://github.com/KHanghoj/DamMet.git
