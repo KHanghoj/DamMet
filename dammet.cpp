@@ -1483,14 +1483,15 @@ void run_mle_bed(general_settings & settings,
     nlopt::result result = opt.optimize(param, minf);
     double second_der = objective_func_F_second_deriv(param[0], &void_stuff);
     double error = 1.96/std::sqrt(-second_der);
-
-
+    double minimum_param = param[0]-error;
+    double maximum_param = param[0]+error;
+    check_param_space(minimum_param, maximum_param);
     f << chrom << ":" << bed.first << "-" << bed.second
       << " " << mle_run.n_cpgs
       << " " << mle_run.total_depth
       << " " << minf
       << " " << param[0]
-      << " " << param[0]-error  << "," <<  param[0]+error
+      << " " << minimum_param  << "," <<  maximum_param
       << " " << void_stuff.iteration
       << " " << result;
     if(VERBOSE){
