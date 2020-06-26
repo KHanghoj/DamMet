@@ -1727,6 +1727,7 @@ int check_and_align_read(general_settings &settings,
     }
     rs.counter++;
 
+
     // check that the read overlaps a CpG
     if(read_overlap_cpg(rd, cpg_bool)){
       rs.reads_skipped++;
@@ -1738,6 +1739,21 @@ int check_and_align_read(general_settings &settings,
       return -1;
     }
 
+    // std::string name = (std::string)bam_get_qname(rd);
+    // uint32_t *cigs = bam_get_cigar(rd);
+    // int nCig = rd->core.n_cigar;
+    // int opCode, opLen;
+    // // loop through read by looping through the cigar string
+    // std::cerr << name; //  << std::endl;
+    // for (int i = 0; i < nCig; i++) {
+    //   opCode = bam_cigar_op(cigs[i]);
+    //   opLen = bam_cigar_oplen(cigs[i]);
+    //   std::cerr << " " << opCode << " " << opLen;
+    // }
+    // std::cerr << std::endl;
+
+
+
     if (rgs.rg_split) {
       int r = find_rg_idx(rd, rgs, read_rg);
       if(r<0){
@@ -1748,6 +1764,22 @@ int check_and_align_read(general_settings &settings,
       read_rg.rgname=ALL_RG;
       read_rg.rgname_idx=ALL_DAMMET_RG_IDX;
     }
+
+    bool anymatches = false;
+    uint32_t *cigs = bam_get_cigar(rd);
+    for (int i = 0; i < rd->core.n_cigar; i++) {
+      int opCode = bam_cigar_op(cigs[i]);
+      if (opCode == 0){ // at least one nucleotide matches
+        anymatches = true;
+        break;
+      }
+    }
+
+    if (!anymatches){
+      rs.trashed;
+      return -1;
+    }
+
     d=align_read(rd, ref);
     return 0;
 }
