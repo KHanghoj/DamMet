@@ -1,6 +1,6 @@
-[submodule "nlopt"]
-	path = nlopt
-	url = https://github.com/KHanghoj/nlopt
 [submodule "htslib"]
 	path = htslib
 	url = https://github.com/KHanghoj/htslib
+[submodule "nlopt"]
+	path = nlopt
+	url = https://github.com/KHanghoj/nlopt
