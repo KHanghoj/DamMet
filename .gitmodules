@@ -4,3 +4,4 @@
 [submodule "nlopt"]
 	path = nlopt
 	url = https://github.com/KHanghoj/nlopt
+	branch = for_dammet
