@@ -38,5 +38,10 @@ clean:
 	rm -f DamMet
 	rm -f ./*.o ./*.d 
 
+install: DamMet 
+	mkdir -p ${PREFIX}/bin
+	cp DamMet ${PREFIX}/bin/
+
+
 test: DamMet
 	./DamMet
