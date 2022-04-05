@@ -10,7 +10,7 @@ FLAGS = -Ihtslib -Inlopt/install/include -O3 $(LDFLAGS)
 
 CXXFLAGS := $(FLAGS) $(CXXFLAGS) -std=c++14 
 
-PACKAGE_VERSION = 1.0.2a
+PACKAGE_VERSION = 1.0.3
 
 PROGRAMS = DamMet
 CXXSRC = $(wildcard *.cpp)

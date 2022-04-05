@@ -40,9 +40,6 @@ int READS = 1e6;
 std::mutex mtx;
 
 std::vector<double> LOG_PRIORS=GET_LOG_PRIOR_FLAT();
-// const std::vector<double> LOG_PRIORS=get_log_prior_flat();
-// const std::vector<double> LOG_PRIORS=get_log_prior_type_specific();
-// const std::vector<double> PRIORS=get_prior();
 const dinucl_pair_of_pairs SEVEN_DINUCL_GENOTYPES = GENERATE_SEVEN_DINUCL_GENOTYPES();
 std::vector<double> PHRED_TO_PROB_CONVERTER = phred_to_double_converter();
 
@@ -152,7 +149,7 @@ void idx_to_params_tm_fast(const int & idx, std::vector<int> & res){
 template <typename T>
 std::vector<T> init_tallymat(const size_t & readpos){
   int n = 1;
-  // +1 to include the the array for alle obs within the reads
+  // +1 to include the the array for all obs within the reads
   n *= (readpos+2);
   n *= PRIMES * STRANDS;
   n *= std::pow(NUCLEOTIDES,4);
@@ -166,7 +163,6 @@ size_t get_idx_tm(const size_t & readpos,
                   const size_t & b2,
                   const size_t & b3,
                   const size_t & b4){
-  // https://en.wikipedia.org/wiki/Row-_and_column-major_order Address calculation in general
   return (readpos * READPOS_MULT +
           prime * PRIME_MULT +
           strand * STRAND_MULT +
@@ -283,7 +279,6 @@ alignment_data align_read(bam1_t * rd, char * ref){
   if(d.mapQ>37){
     d.mapQ = 37;
   }
-  // https://github.com/samtools/htslib/blob/bceff25af7bdf6a5dae77063d8719cdd92f56012/htslib/sam.h#L97
   uint8_t *quals = bam_get_qual(rd);
   uint8_t *seq = bam_get_seq(rd);
   int nCig = rd->core.n_cigar;
@@ -299,11 +294,6 @@ alignment_data align_read(bam1_t * rd, char * ref){
   for (int i = 0; i < nCig; i++) {
     opCode = bam_cigar_op(cigs[i]);
     opLen = bam_cigar_oplen(cigs[i]);
-    // opCode = cigs[i] & BAM_CIGAR_MASK;  // what to do
-    // opLen = cigs[i] >> BAM_CIGAR_SHIFT; // length of what to do
-
-    // fprintf(stderr,"opCode=%d opLen=%d seqPos=%d
-    // wpos=%d\n",opCode,opLen,seq_pos,wpos);
     if (opCode == BAM_CINS ||
         opCode == BAM_CDEL) {             // handle insertions and deletions
 
@@ -475,7 +465,6 @@ double base_condition_one_genotype(const unint &strand, const double &deam,
     // - 2 0 or + 1 3
     res = (deam * (1 - seqerror)) + ((1 - deam) * seqerror / 3) +
           (seqerror * seqerror / 3);
-    // std::cerr << strand << " " << geno << " " << base << " " << " " << deam << " " << res  << std::endl;
   } else {
     // the rest
     if (geno == base) {
@@ -750,11 +739,7 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
   if (!grad.empty()) {
     // resetting the array
     std::fill(grad.begin(), grad.end(), 0);
-    // for (auto & val : grad){
-    //   val = 0;
-    // }
   }
-  // https://stackoverflow.com/a/21249454/2788987
 
   deamrates_void *d = static_cast<deamrates_void*>(my_func_data);
   d->iteration++;
@@ -802,9 +787,6 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
       noM = (seqerror / 3) * deamin_unmethylated + ((1 - deamin_unmethylated) * seqerror / 3.0);
       res = (1-maperror) * (d->settings->M * M + (1-d->settings->M)*noM)  + map_and_prior;
 
-      // diff is zero
-      // grad[idx_param_unmeth] += 0;
-      // grad[idx_param_meth] += 0;
 
     }
     ll += std::log(res);
@@ -839,8 +821,6 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
       noM = (seqerror / 3) * deamin_unmethylated + ((1 - deamin_unmethylated) * seqerror / 3.0);
       res = (1-maperror) * noM  + map_and_prior;
 
-      // always zero
-      // grad[idx_param_unmeth] += 0;
 
     }
 
@@ -851,10 +831,6 @@ double objective_func_deamrates(const std::vector<double> &x, std::vector<double
     std::cerr << "\t-> Iteration: " << d->iteration << " llh: " << ll << '\r';
   }
 
-  // if (!grad.empty()) {
-  //   print_single_array_parameters(p->settings->max_pos_to_end, grad, std::cerr);
-  // }
-  // return -ll;
   return ll;
 }
 
@@ -884,11 +860,6 @@ std::vector<double> single_array_parameters(const size_t & max_pos_to_end, const
   return res;
 }
 
-// -109750 with BOBYQA 10 minutes
-// -109747 with MMA (requires derivatives) 20 seconds wuhu
-// void run_deamrates_optim(general_settings & settings, const std::vector<double> & tmf, std::vector<per_site> data){
-
-/// got this far
 void run_deamrates_optim(general_settings & settings,
                          const std::vector<double> & tmf,
                          uni_ptr_obs &cpg_data,
@@ -900,24 +871,17 @@ void run_deamrates_optim(general_settings & settings,
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
   std::vector<double> param = single_array_parameters(settings.max_pos_to_end, tmf);
-  // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
 
   deamrates_void void_stuff(&settings, cpg_data, nocpg_data);
-  // print_single_array_parameters(settings.max_pos_to_end, param, std::cerr);
   std::vector<double> t; // just a dummy
   f << "##Initial (param are freq from tallycounts file) llh: " << objective_func_deamrates(param, t, &void_stuff) << std::endl;
   size_t n_params = PRIMES * ( settings.max_pos_to_end+2) * PRIMES ;
-  // after 2000+ iterations (many minutes) : BOBYQA -239892
-  // nlopt::opt opt(nlopt::LN_BOBYQA, n_params);
-  // 100 iterations (60 seconds) : -239892
   nlopt::opt opt(nlopt::LD_MMA, n_params);
 
-  // std::vector<double> lb(n_params, SMALLTOLERANCE), up(n_params, 1-SMALLTOLERANCE);
   std::vector<double> lb(n_params, SMALLTOLERANCE), up(n_params, 1-SMALLTOLERANCE);
   opt.set_lower_bounds(lb);
   opt.set_upper_bounds(up);
 
-  //opt.set_min_objective(objective_func_deamrates, &void_stuff);
   opt.set_max_objective(objective_func_deamrates, &void_stuff);
 
   opt.set_xtol_abs(0);
@@ -938,7 +902,6 @@ void run_deamrates_optim(general_settings & settings,
   f << "##llh: " << minf << std::endl;
 
   print_single_array_parameters(settings.max_pos_to_end, param, f);
-  //   print_single_array_parameters(settings.max_pos_to_end, param, std::cout);
   f.close();
 }
 
@@ -997,19 +960,6 @@ std::vector<double> load_deamrates_f(general_settings & settings){
   return res;
 }
 
-// void update_mle_data(per_mle_run & mle_data, const pre_calc_per_site & data, size_t & idx){
-//   mle_data.idx_to_include.push_back(idx);
-//   mle_data.total_depth += data.depth;
-//   mle_data.positions.push_back(data.position);
-//   mle_data.n_cpgs++;
-//   if (mle_data.min_pos > data.position) {
-//     mle_data.min_pos = data.position;
-//   } else if (mle_data.max_pos < data.position) {
-//     mle_data.max_pos = data.position;
-//   } else {
-//     std::cerr << mle_data.curr_pos << " " << mle_data.min_pos << " " << mle_data.max_pos << " NOT GOOD POSITION " << data.position << '\n';
-//   }
-// }
 
 
 double objective_func_F(const std::vector<double> &x, std::vector<double> &grad, void *my_func_data){
@@ -1036,11 +986,6 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
         // d/df per read
         reads_grad += read_der/read_like;
       }
-    // wolfram: derivative  ln((1-w)*((1-x) * k + (x * h)) + w*p)
-    // wolfram got it right, just modified a few things for readability
-    // if(!grad.empty()){
-    //   grad[0] += ((1-mape) * (M - noM)) / res;
-    // }
     }
 
     if(!grad.empty()){
@@ -1066,7 +1011,6 @@ double objective_func_F(const std::vector<double> &x, std::vector<double> &grad,
 double objective_func_F_second_deriv(const double & f,  void *my_func_data){
   F_void *d = static_cast<F_void*>(my_func_data);
   double total_d2=0;
-  // double nominator, denominator;
   double noM, M, mape ;
   double log_like_cgcg_geno;
   double reads_grad, geno_grad;
@@ -1269,7 +1213,7 @@ void run_mle(general_settings & settings,
           pos_to_left--;
         }
       } else {
-        // we are screwed. should not be possible
+        // shouldnt be possible
       }
 
     } // end while loop
@@ -1351,14 +1295,6 @@ void run_mle(general_settings & settings,
     // // to this
 
 
-    // // temp
-    // std::vector<double> dummy;
-    // for (double i=0; i<=1; i+=0.01){
-    //   std::vector<double> x(i);
-    //   std::cout << i << " " << std::setprecision(10) << objective_func_F(param, dummy, &void_stuff) << std::endl;
-    // }
-    // // temp end
-
     // // probability of dinucleotide genotypes for the site in the center.
     // double first_dinucl_genotype = std::exp(loglikelihood_after_mle(param, &cpg_data[curr_idx]));
     // double sum_exp = first_dinucl_genotype;
@@ -1429,7 +1365,6 @@ void run_mle_bed(general_settings & settings,
   std::ofstream f (filename.c_str());
   checkfilehandle<std::ofstream>(f, filename);
 
-  // print header
   print_header(f, "bed n_cpgs n_obs ll f f_95_conf iter opt_return_code");
   if(VERBOSE)
     print_header(f, " incl_pos\n");
@@ -1443,7 +1378,6 @@ void run_mle_bed(general_settings & settings,
   double last_error;
   size_t last_iterations;
 
-  // nlopt::opt opt(nlopt::LN_BOBYQA, 1);
   nlopt::opt opt(nlopt::LD_MMA, 1);
   setup_mma(opt);
 
@@ -1465,7 +1399,6 @@ void run_mle_bed(general_settings & settings,
       continue;
     }
 
-    // it is stupid to run over data again, but too tired to make new structs for the BED setup.
     per_mle_run mle_run(cpg_data[sites_to_include[0]]);
     for (auto it=sites_to_include.begin()+1; it!=sites_to_include.end();it++){
       mle_run.stats_update(cpg_data[*it]);
@@ -1522,10 +1455,6 @@ void update_dinucl_priors(general_settings & settings){
     exit(EXIT_FAILURE);
   }
 
-  // for (const auto & val : LOG_PRIORS){
-  //   std::cerr << val << '\n';
-  // }
-
   for (size_t i=0; i<res.size(); i++){
     LOG_PRIORS[i] = std::log(res[i]/sum);
   }
@@ -1572,8 +1501,7 @@ int find_rg_idx(bam1_t *rd, rgs_info &rgs, read_group_info &read_rg){
 
   uint8_t * rgptr = bam_aux_get(rd, "RG");
   if (rgptr == NULL) {
-    // in the case norg exists. read will be trashed
-    // UNKWOWN
+    // in the case no rg exists. read will be trashed
     std::string rname = std::string(bam_get_qname(rd));
     std::cerr << "[No_found_RG] :: " << rname << '\n';
     return -1;
@@ -1738,20 +1666,6 @@ int check_and_align_read(general_settings &settings,
       rs.trashed++;
       return -1;
     }
-
-    // std::string name = (std::string)bam_get_qname(rd);
-    // uint32_t *cigs = bam_get_cigar(rd);
-    // int nCig = rd->core.n_cigar;
-    // int opCode, opLen;
-    // // loop through read by looping through the cigar string
-    // std::cerr << name; //  << std::endl;
-    // for (int i = 0; i < nCig; i++) {
-    //   opCode = bam_cigar_op(cigs[i]);
-    //   opLen = bam_cigar_oplen(cigs[i]);
-    //   std::cerr << " " << opCode << " " << opLen;
-    // }
-    // std::cerr << std::endl;
-
 
 
     if (rgs.rg_split) {
@@ -2065,8 +1979,6 @@ job_deamrates compute_multithreading_deamrates(general_settings & settings, rgs_
 
   std::vector<std::thread> threads;
   for(size_t i=0; i<settings.nthreads; i++){
-    // std::thread a threadobj(parse_deamrates_wrapper, jobs[i]);
-    // threads.push_back(std::move(a));
     threads.push_back(std::thread(parse_deamrates_wrapper, std::ref(settings), std::ref(jobs[i])));
   }
 
@@ -2101,7 +2013,6 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
     print_log(settings);
   }
 
-  // exit(0);
   std::vector<std::vector<double>> tmf;
   tmf.resize(rgs.n);
   // dumping counts to file
@@ -2194,8 +2105,6 @@ void estF(general_settings & settings, rgs_info &rgs){
 
   std::vector<std::thread> threads;
   for(size_t i=0; i<settings.nthreads; i++){
-    // std::thread a threadobj(parse_deamrates_wrapper, jobs[i]);
-    // threads.push_back(std::move(a));
     threads.push_back(std::thread(parse_fest_wrapper, std::ref(settings), std::ref(jobs[i])));
   }
 
