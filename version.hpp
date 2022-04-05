@@ -1,0 +1,1 @@
+#define DAMMET_VERSION "1.0.4"

@@ -1,4 +1,4 @@
 DamMet
 *.d
 *.o
-version.hpp
+nloptlib
