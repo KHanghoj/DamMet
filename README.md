@@ -14,7 +14,8 @@ The model is implemented as a two step procedure. The first step recovers a maxi
 DamMet is dependent on [htslib](https://github.com/samtools/htslib.git) and [nlopt](https://nlopt.readthedocs.io/en/latest). Both software will be downloaded and installed with DamMet.
 
 ``` bash
-  git clone https://github.com/KHanghoj/DamMet.git
+  git clone --recurse-submodules https://github.com/KHanghoj/DamMet.git
+  ## or update existing git: git submodule update --init --recursive 
   cd DamMet && make && cd ..
 ```
 [zlib](https://zlib.net/) and [cmake](https://cmake.org/download) should be globally installed.
