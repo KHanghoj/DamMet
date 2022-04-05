@@ -1,6 +1,4 @@
-htslib
 DamMet
-nlopt
 *.d
 *.o
 version.hpp
