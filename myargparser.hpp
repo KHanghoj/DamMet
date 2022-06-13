@@ -26,6 +26,7 @@ struct general_settings{
   size_t nthreads = 1;
   bool skip_empty_cpg=false;
   bool verbose=false;
+  bool bound_ci = true;
   size_t minmapQ, minbaseQ, max_pos_to_end;
   double M;
   int flags_off;

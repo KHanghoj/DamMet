@@ -37,6 +37,7 @@ void print_help(){
   std::cerr << "\t-> Includes a list of CpGs in output file (-verbose): " << std::endl;
   std::cerr << "\t-> set seed for bootstrap (-seed): " << std::endl;
   std::cerr << "\t-> set nboots. If 0 (default) calculating error from double derivative of likelihood (-nboots): " << std::endl;
+  std::cerr << "\t-> allow CI to span more than 0 and 1 (-nobound_ci)" << std::endl;
   std::cerr << "\t-> Path to Precalc deamination rates from (-D) (if provided, no need to run estDEAM): " << std::endl;
 }
 
@@ -265,6 +266,10 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
       settings.skip_empty_cpg=true;
     }
 
+    if((*i) == "-nobound_ci"){
+      settings.bound_ci = false;
+    }
+
     if((*i) == "-verbose"){
       settings.verbose=true;
     }
@@ -322,6 +327,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
   ss += "\t-> Exclude BED (-e): " + settings.exclude_bed_fn + '\n';  
   ss += "\t-> -nboots " + std::to_string(settings.nboots) + '\n';
   ss += "\t-> -skip_empty_cpg " + std::to_string(settings.skip_empty_cpg) + '\n';
+  ss += "\t-> -bound_ci " + std::to_string(settings.bound_ci) + '\n';
   ss += "\t-> -verbose " + std::to_string(settings.verbose) + '\n';
   settings.buffer = ss;
 

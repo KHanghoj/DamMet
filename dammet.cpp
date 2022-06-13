@@ -53,6 +53,7 @@ void checkfilehandle(T &fh, std::string filename){
 }
 
 
+
 template <typename T>
 void print_struct(std::unique_ptr<Obs> &data, T & out){
   out << data->pr << " " <<
@@ -1038,10 +1039,9 @@ double objective_func_F_second_deriv(const double & f,  void *my_func_data){
       // second_der += (std::pow((1-obs.me),2) * std::pow((obs.M - obs.noM),2)) / std::pow((-obs.M * (obs.me-1) * f + obs.noM * (obs.me-1) * (1-f) + obs.me*DINUCL_FLAT_PRIOR), 2);
     }
     // exp(log_like_cgcg_geno + LOG_PRIORS) * d/df all_reads. this is only including cgcg as the derivatives of the remaining are 0 as they are unrelated to F.
-
     //g(x) first derivative     z(x)                              y(x)
     geno_grad = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_grad;
-
+    
     // g'(x) (of the first derivative) -> z(x)*y'(x) + z'(x) * y(x)
     geno_grad_der2 = std::exp(log_like_cgcg_geno + LOG_PRIORS[0]) * reads_der2 + (geno_grad * reads_grad);
     log_like_genos = log_like_cgcg_geno + LOG_PRIORS[0];
@@ -1054,7 +1054,9 @@ double objective_func_F_second_deriv(const double & f,  void *my_func_data){
     like_genos = std::exp(log_like_genos);
     // f'(x) of the first derivative
     like_genos_der2 = (- 1.0/(std::pow(like_genos,2))) * geno_grad;
-
+    if (std::isnan(like_genos_der2))
+        continue;
+    
     //             f'(x)           g(x)           f(x)              g'(x)
     total_d2 += like_genos_der2 * geno_grad + (1.0/like_genos) * geno_grad_der2;
   }
@@ -1252,14 +1254,16 @@ void run_mle(general_settings & settings,
         boot_res_s b_res = calc_boots_f(settings, mle_run, void_stuff);
         minimum_param = param[0]-b_res.sd_boot;
         maximum_param = param[0]+b_res.sd_boot;
-        check_param_space(minimum_param, maximum_param);
+        if (settings.bound_ci)
+            check_param_space(minimum_param, maximum_param);
 
       } else {
         second_der = objective_func_F_second_deriv(param[0], &void_stuff);
         error = 1.96/std::sqrt(-second_der);
         minimum_param = param[0]-error;
         maximum_param = param[0]+error;
-        check_param_space(minimum_param, maximum_param);
+        if(settings.bound_ci)
+            check_param_space(minimum_param, maximum_param);
       }
 
       iterations=void_stuff.iteration;
@@ -1418,7 +1422,8 @@ void run_mle_bed(general_settings & settings,
     double error = 1.96/std::sqrt(-second_der);
     double minimum_param = param[0]-error;
     double maximum_param = param[0]+error;
-    check_param_space(minimum_param, maximum_param);
+    if(settings.bound_ci)
+        check_param_space(minimum_param, maximum_param);
     f << chrom << ":" << bed.first << "-" << bed.second
       << " " << mle_run.n_cpgs
       << " " << mle_run.total_depth
@@ -1839,7 +1844,6 @@ void parse_reads_per_chrom_estF(general_settings & settings,
     print_log(settings);
     mtx.unlock();
   }
-
 
   if(settings.bed_f.empty()){
     run_mle(settings, chrom, cpg_data);
