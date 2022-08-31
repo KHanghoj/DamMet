@@ -1771,6 +1771,93 @@ std::vector<Site_s> remove_cpg_wo_data(std::vector<Site_s> &data){
   return(res);
 }
 
+void parse_reads_per_chrom_depth(general_settings & settings,
+                                 std::string & chrom){
+
+  std::unique_ptr<init_bam_s> bam_s = my_init_bam(settings, chrom);
+  std::unique_ptr<init_ref_s> ref_s = my_init_ref(settings, chrom);
+  mask_sites(settings, chrom, ref_s);
+
+  const keeplist_map cpg_map = get_cpg_chrom_pos(ref_s->ref, ref_s->seq_len);
+  int ncpgs=0;
+  // const std::vector<int> cpg_bool = get_cpg_chrom_bool(ref, seq_len);
+  const v_un_ch cpg_bool = get_cpg_chrom(ref_s->ref, ref_s->seq_len, ncpgs);
+
+  read_stats rs;
+  read_group_info read_rg;
+  rgs_info rgs;
+  alignment_data d;
+  std::vector<Site_s> cpg_data;
+  cpg_data.resize(ncpgs);
+  for (auto &m: cpg_map){
+    cpg_data[m.second].pos = m.first;
+  }
+
+  bam1_t *rd = bam_init1();
+
+  time_t start_time_load_data,end_time_load_data;
+  time(&start_time_load_data);
+
+  while (sam_itr_next(bam_s->in, bam_s->iter, rd) >= 0) {
+    int r = check_and_align_read(settings, rd, cpg_bool, ref_s->ref, rgs, rs, read_rg, d);
+    if(r<0)
+      continue;
+
+    size_t cpg_idx;
+    size_t boi; // base of interest
+    Site_s *s;
+    for (size_t i = 0; i < d.t_seq.size()-1; i++){
+      if (d.strand){ // true for negative strand
+        boi = d.t_seq.size()-i-1; // closest to 5 prime
+        if(check_base_quality(settings, d, boi-1, boi))
+          continue;
+
+        if(no_ref_cpg(d.t_ref[boi-1], d.t_ref[boi]))
+          continue;
+
+        cpg_idx = cpg_map.at(d.t_positions[boi-1]);
+        cpg_data[cpg_idx].depth++;
+      } else {
+        boi = i; // closest to 5 prime
+        if(check_base_quality(settings, d, boi, boi+1))
+          continue;
+
+        if(no_ref_cpg(d.t_ref[boi], d.t_ref[boi+1]))
+          continue;
+
+
+        cpg_idx = cpg_map.at(d.t_positions[boi]);
+        cpg_data[cpg_idx].depth++;
+      }
+
+    }
+  }
+  time(&end_time_load_data);
+  
+  
+  // dump file with sites and depth
+  std::string filename = settings.outbase + "." + chrom + ".depth";
+  mtx.lock();
+  settings.buffer += "\t-> Dumping depth to " + filename + '\n';
+  print_log(settings);
+  mtx.unlock();
+  std::ofstream f (filename.c_str());
+  checkfilehandle<std::ofstream>(f, filename);
+  print_header(f, "chrom pos depth\n");
+
+  for (auto & x: cpg_data){
+    if (x.depth<1)
+      continue; 
+
+    f << chrom << " " << x.pos+1 << " " << x.depth << '\n';
+  }
+  
+  f << std::flush;
+  f.close();
+  
+  bam_destroy1(rd);
+}
+
 void parse_reads_per_chrom_estF(general_settings & settings,
                                 std::string & chrom,
                                 std::vector<std::vector<double>> &param_deam_rgs,
@@ -1855,9 +1942,17 @@ void parse_reads_per_chrom_estF(general_settings & settings,
   bam_destroy1(rd);
 }
 
+
+
 void parse_fest_wrapper(general_settings & settings, job_fest &jb){
   for(auto & c : jb.chroms){
     parse_reads_per_chrom_estF(settings, c, jb.param_deam_rgs, jb.rgs);
+  }
+}
+
+void parse_depth_wrapper(general_settings & settings, job_depth &jb){
+  for(auto & c : jb.chroms){
+    parse_reads_per_chrom_depth(settings, c);
   }
 }
 
@@ -2046,6 +2141,42 @@ void estdeam(general_settings & settings, rgs_info &rgs) {
   settings.args_stream << std::flush;
 }
 
+
+void getSites(general_settings & settings){
+  size_t block = settings.nthreads==1?settings.chrom.size(): settings.chrom.size() / settings.nthreads;
+  std::vector<job_depth> jobs(settings.nthreads);
+  size_t curr_chrom_idx=0;
+  for(size_t i=0; i<settings.nthreads; i++){
+
+    int chrom_idx =i*block;
+    for(size_t ii=chrom_idx; ii<(chrom_idx+block) && ii<settings.chrom.size(); ii++){
+      jobs[i].chroms.push_back(settings.chrom[ii]);
+      curr_chrom_idx++;
+    }
+  }
+  size_t n_extra = settings.chrom.size() % settings.nthreads;
+  if(n_extra){
+    std::cerr << "\t-> Adding remaining chromosomes " << n_extra << '\n';
+
+    while (n_extra){
+      jobs[jobs.size()-n_extra].chroms.push_back(settings.chrom[curr_chrom_idx]);
+      curr_chrom_idx++;
+      n_extra--;
+    }
+  }
+
+  std::vector<std::thread> threads;
+  for(size_t i=0; i<settings.nthreads; i++){
+    threads.push_back(std::thread(parse_depth_wrapper, std::ref(settings), std::ref(jobs[i])));
+  }
+
+  for(auto &thread: threads){
+    if(thread.joinable())
+      thread.join();
+  }
+}
+  
+
 void estF(general_settings & settings, rgs_info &rgs){
 
   // load deamination rates from deamrates
@@ -2185,11 +2316,16 @@ int main(int argc, char *argv[]) {
 
   print_log(settings);
 
-  if(settings.analysis=="estF"){
+  
+  if(settings.analysis == "getSites" ){
+    settings.buffer += "\t-> Calc depth per CpG\n";
+    print_log(settings);
+    getSites(settings);
+  } else if(settings.analysis=="estF"){
     settings.buffer += "\t-> Estimating methylation levels (f)\n";
     print_log(settings);
     estF(settings, rgs);
-  } else {
+  } else if (settings.analysis == "estDeam") {
     size_t files_avail = 0;
     for (size_t i=0; i<rgs.n; i++){
       if((!settings.deamrates_filename.empty()) && check_file_exists(settings.deamrates_filename)){
@@ -2212,6 +2348,8 @@ int main(int argc, char *argv[]) {
       settings.buffer += "\t-> Deamination rates are already calculated. Delete Deamination files or change OUTPUT (-O) directory prefix, if you want to recalculate the deamination rates.\n";
       print_log(settings);
     }
+  } else {
+    std::cerr << "Positional argument must be either:\n\tgetSites\n\testF\n\testDeam\n" << std::endl;
   }
 
 

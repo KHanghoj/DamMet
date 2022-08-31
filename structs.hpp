@@ -174,6 +174,7 @@ struct job_deamrates {
 };
 
 
+
 struct job_fest {
 
   job_fest(rgs_info &_rgs, std::vector<std::vector<double>> &_param_deam_rgs){
@@ -186,5 +187,13 @@ struct job_fest {
   };
   rgs_info rgs;
   std::vector<std::vector<double>> param_deam_rgs;
+  std::vector<std::string> chroms;
+};
+
+struct job_depth {
+
+  void add_chrom(std::string &c){
+    chroms.push_back(c);
+  };
   std::vector<std::string> chroms;
 };
