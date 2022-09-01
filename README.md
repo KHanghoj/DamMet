@@ -34,6 +34,12 @@ The two step procedure could look like this:
     ./DamMet estF -b ${BAM} -r ${FASTA} -c ${CHROM} -M ${M} -O ${OUT_PREFIX} -N ${NCPG}
 ```
 
+To obtain read depth for each CpG use the following command:
+```bash
+    ./DamMet getSites -b ${BAM} -r ${FASTA} -c ${CHROM} -O ${OUT_PREFIX}
+```
+This can be useful to ensure that the exact same CpGs are considered in a cross sample comparison.
+
 
 ### Running example ###
 
