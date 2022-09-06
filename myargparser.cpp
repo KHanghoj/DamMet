@@ -77,7 +77,7 @@ void args_parser(int argc, char *argv[], general_settings & settings) {
 
 
   if(std::string(argv[1]) == "estDEAM"){
-    settings.analysis="estDEAM";
+    settings.analysis="estDeam";
   } else if(std::string(argv[1]) == "getSites"){
     settings.analysis="getSites";
   } else if(std::string(argv[1]) == "estF"){
